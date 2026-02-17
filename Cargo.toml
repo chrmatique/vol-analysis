@@ -1,0 +1,33 @@
+[package]
+name = "mkt-noise-analysis"
+version = "0.1.0"
+edition = "2021"
+description = "Market structure volatility analyzer with cross-sector analysis, bond spreads, and neural network predictions"
+
+[dependencies]
+# GUI
+eframe = "0.30"
+egui_plot = "0.30"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Data sources
+yahoo_finance_api = "4"
+reqwest = { version = "0.12", features = ["json"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+time = { version = "0.3", features = ["macros"] }
+csv = "1"
+
+# Neural network
+burn = { version = "0.16", features = ["wgpu", "train", "ndarray"] }
+
+# Utilities
+directories = "5"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+anyhow = "1"
