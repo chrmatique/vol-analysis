@@ -26,6 +26,9 @@ csv = "1"
 # Neural network
 burn = { version = "0.16", features = ["wgpu", "train", "ndarray"] }
 
+# System info
+sysinfo = "0.32"
+
 # Utilities
 directories = "5"
 tracing = "0.1"

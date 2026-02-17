@@ -35,7 +35,8 @@ pub async fn fetch_treasury_rates(api_key: &str) -> Result<Vec<TreasuryRate>> {
     Ok(rates)
 }
 
-/// Fetch sector performance from FMP API (v3 endpoint)
+/// Fetch sector performance from FMP stable sector-performance-snapshot endpoint.
+/// Tries recent business days until data is found.
 pub async fn fetch_sector_performance(api_key: &str) -> Result<Vec<SectorPerformance>> {
     let cache_file = "fmp_sector_performance.json";
     if cache::is_cache_fresh(cache_file, 1) {
@@ -45,29 +46,64 @@ pub async fn fetch_sector_performance(api_key: &str) -> Result<Vec<SectorPerform
         }
     }
 
-    tracing::info!("Fetching FMP sector performance");
-    let url = format!(
-        "https://financialmodelingprep.com/api/v3/sector-performance?apikey={}",
-        api_key
-    );
+    tracing::info!("Fetching FMP sector performance snapshot");
 
-    let resp = reqwest::get(&url)
-        .await
-        .context("Failed to fetch sector performance")?;
+    let today = chrono::Local::now().date_naive();
 
-    let text = resp.text().await.context("Failed to read response body")?;
+    for offset in 1..=7 {
+        let date = today - chrono::Duration::days(offset);
+        let date_str = date.format("%Y-%m-%d");
+        let url = format!(
+            "https://financialmodelingprep.com/stable/sector-performance-snapshot?date={}&apikey={}",
+            date_str, api_key
+        );
 
-    let performance: Vec<SectorPerformance> = serde_json::from_str(&text)
-        .unwrap_or_else(|e| {
-            tracing::warn!("Failed to parse sector performance: {}. Response: {}", e, &text[..200.min(text.len())]);
-            vec![]
-        });
+        let resp = match reqwest::get(&url).await {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::debug!("Request failed for {}: {}", date_str, e);
+                continue;
+            }
+        };
 
-    if !performance.is_empty() {
-        if let Err(e) = cache::save_json(cache_file, &performance) {
-            tracing::warn!("Failed to cache sector performance: {}", e);
+        let text = match resp.text().await {
+            Ok(t) => t,
+            Err(_) => continue,
+        };
+
+        if text.contains("Error") || text.contains("error") {
+            tracing::debug!("FMP error for {}: {}", date_str, &text[..200.min(text.len())]);
+            continue;
+        }
+
+        match serde_json::from_str::<Vec<SectorPerformance>>(&text) {
+            Ok(perf) if !perf.is_empty() => {
+                // Deduplicate by sector (keep first occurrence per sector — typically NASDAQ)
+                let mut seen = std::collections::HashSet::new();
+                let deduped: Vec<SectorPerformance> = perf
+                    .into_iter()
+                    .filter(|p| seen.insert(p.sector.clone()))
+                    .collect();
+
+                tracing::info!(
+                    "Got sector performance for {} ({} sectors)",
+                    date_str,
+                    deduped.len()
+                );
+
+                if let Err(e) = cache::save_json(cache_file, &deduped) {
+                    tracing::warn!("Failed to cache sector performance: {}", e);
+                }
+                return Ok(deduped);
+            }
+            Ok(_) => continue,
+            Err(e) => {
+                tracing::debug!("Parse error for {}: {}", date_str, e);
+                continue;
+            }
         }
     }
 
-    Ok(performance)
+    tracing::warn!("Could not fetch sector performance for any recent date");
+    Ok(vec![])
 }

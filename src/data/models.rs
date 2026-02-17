@@ -90,12 +90,16 @@ pub struct BondSpread {
     pub curve_slope: f64,
 }
 
-/// Sector performance snapshot from FMP
+/// Sector performance snapshot from FMP stable API
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SectorPerformance {
     pub sector: String,
-    #[serde(rename = "changesPercentage")]
+    #[serde(alias = "averageChange", alias = "changesPercentage")]
     pub changes_percentage: f64,
+    #[serde(default)]
+    pub exchange: Option<String>,
+    #[serde(default)]
+    pub date: Option<String>,
 }
 
 /// Volatility metrics for a sector over time
@@ -121,8 +125,21 @@ pub struct CorrelationMatrix {
 pub enum TrainingStatus {
     Idle,
     Training { epoch: usize, total_epochs: usize, loss: f64 },
+    Paused { epoch: usize, total_epochs: usize, loss: f64 },
     Complete { final_loss: f64 },
     Error(String),
+}
+
+/// Compute/resource statistics collected during training
+#[derive(Debug, Clone, Default)]
+pub struct ComputeStats {
+    pub backend_name: String,
+    pub cpu_usage_percent: f32,
+    pub memory_used_mb: u64,
+    pub memory_total_mb: u64,
+    pub epoch_duration_ms: u64,
+    pub samples_per_sec: f64,
+    pub total_params: usize,
 }
 
 impl Default for TrainingStatus {

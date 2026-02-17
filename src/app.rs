@@ -5,7 +5,7 @@ use eframe::egui;
 use crate::analysis;
 use crate::config;
 use crate::data::models::{
-    BondSpread, CorrelationMatrix, MarketData, TrainingStatus, VolatilityMetrics,
+    BondSpread, ComputeStats, CorrelationMatrix, MarketData, TrainingStatus, VolatilityMetrics,
 };
 use crate::nn::training::TrainingProgress;
 use crate::ui;
@@ -40,6 +40,7 @@ pub struct AppState {
     pub training_status: TrainingStatus,
     pub training_losses: Vec<f64>,
     pub nn_predictions: Vec<(String, f64)>,
+    pub compute_stats: ComputeStats,
     pub training_progress: Option<TrainingProgress>,
     /// Shared channel for async data loading results
     pub data_receiver: Option<Arc<Mutex<Option<MarketData>>>>,
@@ -57,6 +58,7 @@ impl Default for AppState {
             training_status: TrainingStatus::Idle,
             training_losses: vec![],
             nn_predictions: vec![],
+            compute_stats: ComputeStats::default(),
             training_progress: None,
             data_receiver: None,
         }

@@ -19,12 +19,15 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         ui.label("Model Architecture: LSTM (hidden=64) -> Linear");
         ui.label("Input: 26 features (11 sector vols + 11 returns + cross-corr + spread + slope + VIX-proxy)");
         ui.label("Output: 5-day forward realized volatility prediction");
-        ui.label(format!("Lookback: {} trading days per sample", crate::config::NN_LOOKBACK_DAYS));
+        ui.label(format!(
+            "Lookback: {} trading days per sample",
+            crate::config::NN_LOOKBACK_DAYS
+        ));
     });
 
     ui.add_space(8.0);
 
-    // Check training progress from background thread
+    // Sync training progress from background thread
     if let Some(ref progress) = state.training_progress {
         if let Ok(status) = progress.status.lock() {
             state.training_status = status.clone();
@@ -34,6 +37,9 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         }
         if let Ok(preds) = progress.predictions.lock() {
             state.nn_predictions = preds.clone();
+        }
+        if let Ok(stats) = progress.compute_stats.lock() {
+            state.compute_stats = stats.clone();
         }
     }
 
@@ -55,9 +61,46 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                     "Training... Epoch {}/{} | Loss: {:.6}",
                     epoch, total_epochs, loss
                 ));
-                let progress = *epoch as f32 / *total_epochs as f32;
-                ui.add(egui::ProgressBar::new(progress).show_percentage());
-                ui.ctx().request_repaint_after(std::time::Duration::from_millis(200));
+                let frac = *epoch as f32 / *total_epochs as f32;
+                ui.add(egui::ProgressBar::new(frac).show_percentage());
+
+                if ui.button("Pause").clicked() {
+                    if let Some(ref progress) = state.training_progress {
+                        progress.request_pause();
+                    }
+                }
+
+                ui.ctx()
+                    .request_repaint_after(std::time::Duration::from_millis(200));
+            }
+            TrainingStatus::Paused {
+                epoch,
+                total_epochs,
+                loss,
+            } => {
+                ui.colored_label(
+                    egui::Color32::from_rgb(220, 180, 50),
+                    format!(
+                        "Paused at Epoch {}/{} | Loss: {:.6}",
+                        epoch, total_epochs, loss
+                    ),
+                );
+                let frac = *epoch as f32 / *total_epochs as f32;
+                ui.add(egui::ProgressBar::new(frac).show_percentage());
+
+                if ui.button("Resume").clicked() {
+                    if let Some(ref progress) = state.training_progress {
+                        progress.request_resume();
+                    }
+                }
+                if ui.button("Stop").clicked() {
+                    // Drop the progress handle -- training thread will eventually finish its current epoch
+                    state.training_status = TrainingStatus::Idle;
+                    state.training_progress = None;
+                }
+
+                ui.ctx()
+                    .request_repaint_after(std::time::Duration::from_millis(300));
             }
             TrainingStatus::Complete { final_loss } => {
                 ui.colored_label(
@@ -85,6 +128,16 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     });
 
     ui.add_space(8.0);
+
+    // Compute / Resource Statistics panel
+    let is_active = matches!(
+        state.training_status,
+        TrainingStatus::Training { .. } | TrainingStatus::Paused { .. } | TrainingStatus::Complete { .. }
+    );
+    if is_active || state.compute_stats.total_params > 0 {
+        render_compute_stats(ui, &state.compute_stats, &state.training_status);
+        ui.add_space(8.0);
+    }
 
     // Loss curve
     if !state.training_losses.is_empty() {
@@ -149,6 +202,113 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     ui.separator();
     ui.add_space(4.0);
     ui.small("Neural network powered by the Burn deep learning framework (NdArray backend with autodiff).");
+}
+
+fn render_compute_stats(
+    ui: &mut egui::Ui,
+    stats: &crate::data::models::ComputeStats,
+    status: &TrainingStatus,
+) {
+    ui.group(|ui| {
+        ui.heading("Compute Statistics");
+        ui.add_space(4.0);
+
+        egui::Grid::new("compute_stats_grid")
+            .num_columns(2)
+            .spacing(egui::vec2(16.0, 4.0))
+            .show(ui, |ui| {
+                // Backend
+                ui.label("Backend:");
+                ui.strong(&stats.backend_name);
+                ui.end_row();
+
+                // Model parameters
+                if stats.total_params > 0 {
+                    ui.label("Model Parameters:");
+                    ui.strong(format_param_count(stats.total_params));
+                    ui.end_row();
+                }
+
+                // CPU usage
+                ui.label("CPU Usage:");
+                let cpu_color = if stats.cpu_usage_percent > 80.0 {
+                    egui::Color32::from_rgb(220, 50, 50)
+                } else if stats.cpu_usage_percent > 50.0 {
+                    egui::Color32::from_rgb(220, 180, 50)
+                } else {
+                    egui::Color32::from_rgb(50, 180, 50)
+                };
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::ProgressBar::new(stats.cpu_usage_percent / 100.0)
+                            .desired_width(120.0),
+                    );
+                    ui.colored_label(cpu_color, format!("{:.1}%", stats.cpu_usage_percent));
+                });
+                ui.end_row();
+
+                // Memory usage
+                if stats.memory_total_mb > 0 {
+                    ui.label("Memory:");
+                    let mem_frac = stats.memory_used_mb as f32 / stats.memory_total_mb as f32;
+                    ui.horizontal(|ui| {
+                        ui.add(egui::ProgressBar::new(mem_frac).desired_width(120.0));
+                        ui.label(format!(
+                            "{:.1} / {:.1} GB",
+                            stats.memory_used_mb as f64 / 1024.0,
+                            stats.memory_total_mb as f64 / 1024.0,
+                        ));
+                    });
+                    ui.end_row();
+                }
+
+                // Epoch duration
+                if stats.epoch_duration_ms > 0 {
+                    ui.label("Last Epoch Duration:");
+                    if stats.epoch_duration_ms >= 1000 {
+                        ui.strong(format!("{:.2}s", stats.epoch_duration_ms as f64 / 1000.0));
+                    } else {
+                        ui.strong(format!("{}ms", stats.epoch_duration_ms));
+                    }
+                    ui.end_row();
+                }
+
+                // Throughput
+                if stats.samples_per_sec > 0.0 {
+                    ui.label("Throughput:");
+                    ui.strong(format!("{:.0} samples/sec", stats.samples_per_sec));
+                    ui.end_row();
+                }
+
+                // Status indicator
+                ui.label("Status:");
+                match status {
+                    TrainingStatus::Training { .. } => {
+                        ui.colored_label(egui::Color32::from_rgb(50, 180, 50), "Running");
+                    }
+                    TrainingStatus::Paused { .. } => {
+                        ui.colored_label(egui::Color32::from_rgb(220, 180, 50), "Paused");
+                    }
+                    TrainingStatus::Complete { .. } => {
+                        ui.colored_label(egui::Color32::from_rgb(100, 150, 255), "Complete");
+                    }
+                    _ => {
+                        ui.label("Idle");
+                    }
+                }
+                ui.end_row();
+            });
+    });
+}
+
+fn format_param_count(count: usize) -> String {
+    if count >= 1_000_000 {
+        format!("{:.2}M", count as f64 / 1_000_000.0)
+    } else if count >= 1_000 {
+        format!("{:.1}K", count as f64 / 1_000.0)
+    } else {
+        format!("{}", count)
+    }
 }
 
 fn start_training(state: &mut AppState) {

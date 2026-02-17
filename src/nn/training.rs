@@ -1,15 +1,19 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use burn::{
     backend::{Autodiff, NdArray},
     data::dataloader::DataLoaderBuilder,
     module::AutodiffModule,
+    module::Module,
     optim::{AdamConfig, GradientsParams, Optimizer},
     tensor::backend::AutodiffBackend,
 };
+use sysinfo::System;
 
 use crate::config;
-use crate::data::models::{MarketData, TrainingStatus};
+use crate::data::models::{ComputeStats, MarketData, TrainingStatus};
 use crate::nn::dataset::{build_dataset, VolBatcher};
 use crate::nn::model::{VolPredictionModelConfig, NUM_FEATURES, OUTPUT_SIZE};
 
@@ -22,6 +26,8 @@ pub struct TrainingProgress {
     pub status: Arc<Mutex<TrainingStatus>>,
     pub losses: Arc<Mutex<Vec<f64>>>,
     pub predictions: Arc<Mutex<Vec<(String, f64)>>>,
+    pub pause_flag: Arc<AtomicBool>,
+    pub compute_stats: Arc<Mutex<ComputeStats>>,
 }
 
 impl TrainingProgress {
@@ -30,13 +36,39 @@ impl TrainingProgress {
             status: Arc::new(Mutex::new(TrainingStatus::Idle)),
             losses: Arc::new(Mutex::new(Vec::new())),
             predictions: Arc::new(Mutex::new(Vec::new())),
+            pause_flag: Arc::new(AtomicBool::new(false)),
+            compute_stats: Arc::new(Mutex::new(ComputeStats {
+                backend_name: "NdArray (CPU) + Autodiff".to_string(),
+                ..Default::default()
+            })),
         }
+    }
+
+    pub fn request_pause(&self) {
+        self.pause_flag.store(true, Ordering::SeqCst);
+    }
+
+    pub fn request_resume(&self) {
+        self.pause_flag.store(false, Ordering::SeqCst);
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.pause_flag.load(Ordering::SeqCst)
     }
 }
 
 /// Run the full training pipeline
 pub fn train(market_data: &MarketData, progress: &TrainingProgress) {
     let device = <NdArray as burn::tensor::backend::Backend>::Device::default();
+
+    // System info for compute stats
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    let total_memory_mb = sys.total_memory() / (1024 * 1024);
+
+    // Update initial stats
+    update_compute_stats(progress, &mut sys, total_memory_mb, 0, 0.0, 0);
 
     // Update status
     set_status(progress, TrainingStatus::Training {
@@ -86,16 +118,55 @@ pub fn train(market_data: &MarketData, progress: &TrainingProgress) {
     };
     let mut model = model_config.init::<TrainingBackend>(&device);
 
+    let param_count = model.num_params();
+
     // Optimizer
     let mut optim = AdamConfig::new().init();
 
     // Training loop
     let mut best_loss = f64::INFINITY;
     for epoch in 0..config::NN_EPOCHS {
+        // Pause check: spin-wait while paused
+        while progress.is_paused() {
+            if let Ok(status) = progress.status.lock() {
+                if matches!(*status, TrainingStatus::Training { .. }) {
+                    drop(status);
+                    let current_loss = progress.losses.lock()
+                        .ok()
+                        .and_then(|l| l.last().copied())
+                        .unwrap_or(f64::NAN);
+                    set_status(progress, TrainingStatus::Paused {
+                        epoch,
+                        total_epochs: config::NN_EPOCHS,
+                        loss: current_loss,
+                    });
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+
+        // When resuming from pause, set status back to Training
+        set_status(progress, TrainingStatus::Training {
+            epoch,
+            total_epochs: config::NN_EPOCHS,
+            loss: progress.losses.lock()
+                .ok()
+                .and_then(|l| l.last().copied())
+                .unwrap_or(f64::NAN),
+        });
+
+        let epoch_start = Instant::now();
         let mut epoch_loss = 0.0;
         let mut batch_count = 0;
+        let mut samples_this_epoch = 0_usize;
 
         for batch in dataloader.iter() {
+            // Check pause mid-epoch too
+            while progress.is_paused() {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+
+            let batch_size = batch.inputs.dims()[0];
             let output = model.forward(batch.inputs);
             let loss = mse_loss(output, batch.targets);
 
@@ -109,7 +180,11 @@ pub fn train(market_data: &MarketData, progress: &TrainingProgress) {
 
             epoch_loss += loss_scalar;
             batch_count += 1;
+            samples_this_epoch += batch_size;
         }
+
+        let epoch_duration = epoch_start.elapsed();
+        let epoch_ms = epoch_duration.as_millis() as u64;
 
         let avg_loss = if batch_count > 0 {
             epoch_loss / batch_count as f64
@@ -117,7 +192,12 @@ pub fn train(market_data: &MarketData, progress: &TrainingProgress) {
             f64::NAN
         };
 
-        // Track best
+        let samples_per_sec = if epoch_ms > 0 {
+            samples_this_epoch as f64 / (epoch_ms as f64 / 1000.0)
+        } else {
+            0.0
+        };
+
         if avg_loss < best_loss {
             best_loss = avg_loss;
         }
@@ -131,6 +211,9 @@ pub fn train(market_data: &MarketData, progress: &TrainingProgress) {
             total_epochs: config::NN_EPOCHS,
             loss: avg_loss,
         });
+
+        // Update compute stats
+        update_compute_stats(progress, &mut sys, total_memory_mb, epoch_ms, samples_per_sec, param_count);
     }
 
     // Generate predictions using the trained model's inference mode
@@ -139,6 +222,31 @@ pub fn train(market_data: &MarketData, progress: &TrainingProgress) {
     generate_predictions(&valid_model, market_data, &inference_device, progress);
 
     set_status(progress, TrainingStatus::Complete { final_loss: best_loss });
+}
+
+/// Update compute/resource stats
+fn update_compute_stats(
+    progress: &TrainingProgress,
+    sys: &mut System,
+    total_memory_mb: u64,
+    epoch_ms: u64,
+    samples_per_sec: f64,
+    param_count: usize,
+) {
+    sys.refresh_cpu_usage();
+    sys.refresh_memory();
+
+    let cpu_usage = sys.global_cpu_usage();
+    let used_memory_mb = sys.used_memory() / (1024 * 1024);
+
+    if let Ok(mut stats) = progress.compute_stats.lock() {
+        stats.cpu_usage_percent = cpu_usage;
+        stats.memory_used_mb = used_memory_mb;
+        stats.memory_total_mb = total_memory_mb;
+        stats.epoch_duration_ms = epoch_ms;
+        stats.samples_per_sec = samples_per_sec;
+        stats.total_params = param_count;
+    }
 }
 
 /// Mean squared error loss

@@ -1,0 +1,68 @@
+[
+  {
+    "sector": "Basic Materials",
+    "changes_percentage": 1.562914001024418,
+    "exchange": "NASDAQ",
+    "date": "2026-02-13"
+  },
+  {
+    "sector": "Communication Services",
+    "changes_percentage": 0.976101347127134,
+    "exchange": "NASDAQ",
+    "date": "2026-02-13"
+  },
+  {
+    "sector": "Consumer Cyclical",
+    "changes_percentage": 0.2982031346904668,
+    "exchange": "NASDAQ",
+    "date": "2026-02-13"
+  },
+  {
+    "sector": "Consumer Defensive",
+    "changes_percentage": 1.4297793214762322,
+    "exchange": "NASDAQ",
+    "date": "2026-02-13"
+  },
+  {
+    "sector": "Energy",
+    "changes_percentage": 1.637182093986311,
+    "exchange": "NASDAQ",
+    "date": "2026-02-13"
+  },
+  {
+    "sector": "Financial Services",
+    "changes_percentage": 0.7306097852106896,
+    "exchange": "NASDAQ",
+    "date": "2026-02-13"
+  },
+  {
+    "sector": "Healthcare",
+    "changes_percentage": 1.3495223941841772,
+    "exchange": "NASDAQ",
+    "date": "2026-02-13"
+  },
+  {
+    "sector": "Industrials",
+    "changes_percentage": 0.4700323994672795,
+    "exchange": "NASDAQ",
+    "date": "2026-02-13"
+  },
+  {
+    "sector": "Real Estate",
+    "changes_percentage": -0.40779477132916186,
+    "exchange": "NASDAQ",
+    "date": "2026-02-13"
+  },
+  {
+    "sector": "Technology",
+    "changes_percentage": -0.6843212848944957,
+    "exchange": "NASDAQ",
+    "date": "2026-02-13"
+  },
+  {
+    "sector": "Utilities",
+    "changes_percentage": 3.549065427007636,
+    "exchange": "NASDAQ",
+    "date": "2026-02-13"
+  }
+]
