@@ -106,7 +106,7 @@ src/
 ![Dashboard](./ex-imgs/dashboard.png)
 
 #### Sector Volume Overview
-![Sector Volume](./ex-imgs/overview.png)
+![Sector Volume](./ex-imgs/sector-vol.png)
 
 #### US Bond Yield Curve
 ![Bond Curve](./ex-imgs/curve.png)
