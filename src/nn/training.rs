@@ -266,12 +266,13 @@ fn train_impl<B: AutodiffBackend>(
     let inference_device = <B::InnerBackend as burn::tensor::backend::Backend>::Device::default();
     generate_predictions::<B::InnerBackend>(&valid_model, market_data, &inference_device, progress);
 
-    set_status(progress, TrainingStatus::Complete { final_loss: best_loss });
-
-    // Save model to disk in compressed format for future sessions
+    // Save model to disk BEFORE setting Complete status so the UI's load_model()
+    // call is guaranteed to find the file on the very first repaint after Complete.
     if let Err(e) = crate::nn::persistence::save_model(&valid_model, best_loss) {
         tracing::warn!("Failed to save trained model: {}", e);
     }
+
+    set_status(progress, TrainingStatus::Complete { final_loss: best_loss });
 }
 
 /// Update CPU/memory compute stats

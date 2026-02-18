@@ -4,6 +4,33 @@ use egui_plot::{Line, Plot, PlotPoints};
 use crate::app::AppState;
 use crate::config;
 
+/// Inline height-adjustment drag control placed immediately above a chart.
+fn height_control(ui: &mut egui::Ui, height: &mut f32, label: &str) {
+    egui::Frame::none()
+        .fill(egui::Color32::from_rgba_unmultiplied(80, 120, 200, 18))
+        .inner_margin(egui::Margin::symmetric(8.0, 3.0))
+        .rounding(egui::Rounding::same(4.0))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.colored_label(egui::Color32::from_rgb(100, 160, 255), "⇕");
+                ui.colored_label(
+                    egui::Color32::from_gray(170),
+                    label,
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add(
+                        egui::DragValue::new(height)
+                            .speed(2.0)
+                            .range(80.0..=800.0)
+                            .suffix(" px"),
+                    );
+                    ui.colored_label(egui::Color32::from_gray(130), "drag to resize ·");
+                });
+            });
+        });
+    ui.add_space(2.0);
+}
+
 pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Sector Volatility Analysis");
     ui.add_space(8.0);
@@ -63,6 +90,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
 
     // Price chart
     ui.collapsing("Price Chart", |ui| {
+        height_control(ui, &mut state.chart_heights.sector_price, "Price Chart Height");
+
         let prices: PlotPoints = sector
             .bars
             .iter()
@@ -71,7 +100,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .collect();
 
         Plot::new("price_plot")
-            .height(200.0)
+            .height(state.chart_heights.sector_price)
             .allow_drag(true)
             .allow_zoom(true)
             .x_axis_label("Trading Day")
@@ -116,8 +145,9 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .map(|(i, v)| [i as f64, *v * 100.0])
             .collect();
 
+        height_control(ui, &mut state.chart_heights.sector_vol, "Volatility Chart Height");
         Plot::new("vol_plot")
-            .height(250.0)
+            .height(state.chart_heights.sector_vol)
             .allow_drag(true)
             .allow_zoom(true)
             .x_axis_label("Trading Day (aligned)")
@@ -156,8 +186,9 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             (0..vm.vol_ratio.len()).map(|i| [i as f64, 1.0]),
         );
 
+        height_control(ui, &mut state.chart_heights.sector_ratio, "Vol Ratio Chart Height");
         Plot::new("ratio_plot")
-            .height(150.0)
+            .height(state.chart_heights.sector_ratio)
             .allow_drag(true)
             .allow_zoom(true)
             .x_axis_label("Trading Day (aligned)")

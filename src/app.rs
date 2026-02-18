@@ -59,6 +59,38 @@ impl Default for Plot3DState {
     }
 }
 
+/// Per-chart height overrides (pixels), adjustable by the user at runtime
+#[derive(Debug, Clone)]
+pub struct ChartHeights {
+    pub sector_price: f32,
+    pub sector_vol: f32,
+    pub sector_ratio: f32,
+    pub bond_yield_curve: f32,
+    pub bond_term_spread: f32,
+    pub bond_curve_slope: f32,
+    pub nn_loss: f32,
+    pub kurtosis_distribution: f32,
+    pub kurtosis_rolling_kurtosis: f32,
+    pub kurtosis_rolling_skewness: f32,
+}
+
+impl Default for ChartHeights {
+    fn default() -> Self {
+        Self {
+            sector_price: 200.0,
+            sector_vol: 250.0,
+            sector_ratio: 150.0,
+            bond_yield_curve: 200.0,
+            bond_term_spread: 200.0,
+            bond_curve_slope: 180.0,
+            nn_loss: 200.0,
+            kurtosis_distribution: 280.0,
+            kurtosis_rolling_kurtosis: 200.0,
+            kurtosis_rolling_skewness: 200.0,
+        }
+    }
+}
+
 /// Shared application state
 pub struct AppState {
     pub active_tab: Tab,
@@ -74,9 +106,12 @@ pub struct AppState {
     pub use_gpu: bool,
     pub training_progress: Option<TrainingProgress>,
     pub plot_3d: Plot3DState,
+    pub chart_heights: ChartHeights,
     /// Loaded model from disk (avoids retraining on each launch)
     pub loaded_model: Option<LoadedModel>,
     pub model_metadata: Option<ModelMetadata>,
+    /// Feedback message from the last model save/load attempt, shown in the Neural Net tab
+    pub persistence_message: Option<String>,
     /// Shared channel for async data loading results
     pub data_receiver: Option<Arc<Mutex<Option<MarketData>>>>,
 }
@@ -105,8 +140,10 @@ impl Default for AppState {
             use_gpu: true,
             training_progress: None,
             plot_3d: Plot3DState::default(),
+            chart_heights: ChartHeights::default(),
             loaded_model,
             model_metadata,
+            persistence_message: None,
             data_receiver: None,
         }
     }
@@ -257,13 +294,13 @@ impl MktNoiseApp {
             }
 
             // Fetch treasury rates
-            match crate::data::fmp::fetch_treasury_rates(config::FMP_API_KEY).await {
+            match crate::data::fmp::fetch_treasury_rates(&config::fmp_api_key()).await {
                 Ok(rates) => market_data.treasury_rates = rates,
                 Err(e) => tracing::warn!("Failed to fetch treasury rates: {}", e),
             }
 
             // Fetch sector performance
-            match crate::data::fmp::fetch_sector_performance(config::FMP_API_KEY).await {
+            match crate::data::fmp::fetch_sector_performance(&config::fmp_api_key()).await {
                 Ok(perf) => market_data.sector_performance = perf,
                 Err(e) => tracing::warn!("Failed to fetch sector performance: {}", e),
             }

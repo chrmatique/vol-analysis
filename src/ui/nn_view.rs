@@ -5,6 +5,32 @@ use crate::app::AppState;
 use crate::data::models::TrainingStatus;
 use crate::nn::training::TrainingProgress;
 
+fn height_control(ui: &mut egui::Ui, height: &mut f32, label: &str) {
+    egui::Frame::none()
+        .fill(egui::Color32::from_rgba_unmultiplied(80, 120, 200, 18))
+        .inner_margin(egui::Margin::symmetric(8.0, 3.0))
+        .rounding(egui::Rounding::same(4.0))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.colored_label(egui::Color32::from_rgb(100, 160, 255), "⇕");
+                ui.colored_label(
+                    egui::Color32::from_gray(170),
+                    label,
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add(
+                        egui::DragValue::new(height)
+                            .speed(2.0)
+                            .range(80.0..=800.0)
+                            .suffix(" px"),
+                    );
+                    ui.colored_label(egui::Color32::from_gray(130), "drag to resize ·");
+                });
+            });
+        });
+    ui.add_space(2.0);
+}
+
 pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Neural Network - Volatility Regime Prediction");
     ui.add_space(8.0);
@@ -43,11 +69,22 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         }
     }
 
-    // After training completes, load the saved model so we have it for future inference
+    // After training completes, load the saved model so we have it for future inference.
+    // persistence_message is only set here (not in Default) so the banner is fresh each session.
     if matches!(state.training_status, TrainingStatus::Complete { .. }) && state.loaded_model.is_none() {
-        if let Some((model, meta)) = crate::nn::persistence::load_model() {
-            state.loaded_model = Some(model);
-            state.model_metadata = Some(meta);
+        match crate::nn::persistence::load_model() {
+            Some((model, meta)) => {
+                state.persistence_message = Some(format!(
+                    "Model saved and loaded from disk (trained {}; loss: {:.6}).",
+                    meta.trained_at, meta.final_loss
+                ));
+                state.loaded_model = Some(model);
+                state.model_metadata = Some(meta);
+            }
+            None => {
+                state.persistence_message =
+                    Some("Warning: model could not be saved or loaded from disk.".to_string());
+            }
         }
     }
 
@@ -110,10 +147,27 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         ui.add_space(4.0);
     }
 
-    // Training controls
-    ui.horizontal(|ui| {
-        match &state.training_status {
-            TrainingStatus::Idle => {
+    // Persistence feedback (save/load result from the most recent training session)
+    if let Some(ref msg) = state.persistence_message.clone() {
+        let is_warning = msg.starts_with("Warning");
+        let color = if is_warning {
+            egui::Color32::from_rgb(220, 120, 50)
+        } else {
+            egui::Color32::from_rgb(50, 200, 100)
+        };
+        ui.horizontal(|ui| {
+            ui.colored_label(color, msg.as_str());
+            if ui.small_button("✕").clicked() {
+                state.persistence_message = None;
+            }
+        });
+        ui.add_space(4.0);
+    }
+
+    // Training controls -- each arm owns its own layout so ProgressBar never hides buttons
+    match state.training_status.clone() {
+        TrainingStatus::Idle => {
+            ui.horizontal(|ui| {
                 if ui.button("Train Model").clicked() {
                     start_training(state);
                 }
@@ -132,44 +186,34 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                         }
                     }
                 }
-            }
-            TrainingStatus::Training {
-                epoch,
-                total_epochs,
-                loss,
-            } => {
+            });
+        }
+        TrainingStatus::Training { epoch, total_epochs, loss } => {
+            // Row 1: spinner + status text + Pause button
+            ui.horizontal(|ui| {
                 ui.spinner();
                 ui.label(format!(
                     "Training... Epoch {}/{} | Loss: {:.6}",
                     epoch, total_epochs, loss
                 ));
-                let frac = *epoch as f32 / *total_epochs as f32;
-                ui.add(egui::ProgressBar::new(frac).show_percentage());
-
                 if ui.button("Pause").clicked() {
                     if let Some(ref progress) = state.training_progress {
                         progress.request_pause();
                     }
                 }
-
-                ui.ctx()
-                    .request_repaint_after(std::time::Duration::from_millis(200));
-            }
-            TrainingStatus::Paused {
-                epoch,
-                total_epochs,
-                loss,
-            } => {
+            });
+            // Row 2: full-width progress bar
+            let frac = epoch as f32 / total_epochs as f32;
+            ui.add(egui::ProgressBar::new(frac).show_percentage());
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(200));
+        }
+        TrainingStatus::Paused { epoch, total_epochs, loss } => {
+            // Row 1: status text + Resume + Stop buttons
+            ui.horizontal(|ui| {
                 ui.colored_label(
                     egui::Color32::from_rgb(220, 180, 50),
-                    format!(
-                        "Paused at Epoch {}/{} | Loss: {:.6}",
-                        epoch, total_epochs, loss
-                    ),
+                    format!("Paused at Epoch {}/{} | Loss: {:.6}", epoch, total_epochs, loss),
                 );
-                let frac = *epoch as f32 / *total_epochs as f32;
-                ui.add(egui::ProgressBar::new(frac).show_percentage());
-
                 if ui.button("Resume").clicked() {
                     if let Some(ref progress) = state.training_progress {
                         progress.request_resume();
@@ -179,11 +223,14 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                     state.training_status = TrainingStatus::Idle;
                     state.training_progress = None;
                 }
-
-                ui.ctx()
-                    .request_repaint_after(std::time::Duration::from_millis(300));
-            }
-            TrainingStatus::Complete { final_loss } => {
+            });
+            // Row 2: full-width progress bar
+            let frac = epoch as f32 / total_epochs as f32;
+            ui.add(egui::ProgressBar::new(frac).show_percentage());
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(300));
+        }
+        TrainingStatus::Complete { final_loss } => {
+            ui.horizontal(|ui| {
                 ui.colored_label(
                     egui::Color32::from_rgb(50, 180, 50),
                     format!("Training complete! Final loss: {:.6}", final_loss),
@@ -204,8 +251,10 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                         }
                     }
                 }
-            }
-            TrainingStatus::Error(msg) => {
+            });
+        }
+        TrainingStatus::Error(ref msg) => {
+            ui.horizontal(|ui| {
                 ui.colored_label(
                     egui::Color32::from_rgb(220, 50, 50),
                     format!("Error: {}", msg),
@@ -214,9 +263,9 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                     state.training_status = TrainingStatus::Idle;
                     state.training_progress = None;
                 }
-            }
+            });
         }
-    });
+    }
 
     ui.add_space(8.0);
 
@@ -243,8 +292,9 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .map(|(i, l)| [i as f64, *l])
             .collect();
 
+        height_control(ui, &mut state.chart_heights.nn_loss, "Loss Chart Height");
         Plot::new("loss_plot")
-            .height(200.0)
+            .height(state.chart_heights.nn_loss)
             .allow_drag(true)
             .allow_zoom(true)
             .x_axis_label("Epoch")

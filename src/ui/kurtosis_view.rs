@@ -3,6 +3,32 @@ use egui_plot::{Line, Plot, PlotPoints};
 
 use crate::app::AppState;
 
+fn height_control(ui: &mut egui::Ui, height: &mut f32, label: &str) {
+    egui::Frame::none()
+        .fill(egui::Color32::from_rgba_unmultiplied(80, 120, 200, 18))
+        .inner_margin(egui::Margin::symmetric(8.0, 3.0))
+        .rounding(egui::Rounding::same(4.0))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.colored_label(egui::Color32::from_rgb(100, 160, 255), "⇕");
+                ui.colored_label(
+                    egui::Color32::from_gray(170),
+                    label,
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add(
+                        egui::DragValue::new(height)
+                            .speed(2.0)
+                            .range(80.0..=800.0)
+                            .suffix(" px"),
+                    );
+                    ui.colored_label(egui::Color32::from_gray(130), "drag to resize ·");
+                });
+            });
+        });
+    ui.add_space(2.0);
+}
+
 pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Kurtosis & Return Distribution Analysis");
     ui.add_space(8.0);
@@ -94,8 +120,9 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .map(|p| [p[0] * 100.0, p[1] / 100.0])
             .collect();
 
+        height_control(ui, &mut state.chart_heights.kurtosis_distribution, "Distribution Plot Height");
         Plot::new("distribution_plot")
-            .height(280.0)
+            .height(state.chart_heights.kurtosis_distribution)
             .allow_drag(true)
             .allow_zoom(true)
             .x_axis_label("Daily Log Return (%)")
@@ -155,8 +182,9 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .unwrap_or(metrics.rolling_kurtosis.len() as f64);
         let zero_line: PlotPoints = vec![[0.0, 0.0], [x_max, 0.0]].into_iter().collect();
 
+        height_control(ui, &mut state.chart_heights.kurtosis_rolling_kurtosis, "Rolling Kurtosis Chart Height");
         Plot::new("rolling_kurtosis_plot")
-            .height(200.0)
+            .height(state.chart_heights.kurtosis_rolling_kurtosis)
             .allow_drag(true)
             .allow_zoom(true)
             .x_axis_label("Trading Days")
@@ -211,8 +239,9 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .unwrap_or(metrics.rolling_skewness.len() as f64);
         let zero_line: PlotPoints = vec![[0.0, 0.0], [x_max, 0.0]].into_iter().collect();
 
+        height_control(ui, &mut state.chart_heights.kurtosis_rolling_skewness, "Rolling Skewness Chart Height");
         Plot::new("rolling_skewness_plot")
-            .height(200.0)
+            .height(state.chart_heights.kurtosis_rolling_skewness)
             .allow_drag(true)
             .allow_zoom(true)
             .x_axis_label("Trading Days")

@@ -4,6 +4,32 @@ use egui_plot::{Bar, BarChart, Line, Plot, PlotPoints};
 use crate::analysis::bond_spreads;
 use crate::app::AppState;
 
+fn height_control(ui: &mut egui::Ui, height: &mut f32, label: &str) {
+    egui::Frame::none()
+        .fill(egui::Color32::from_rgba_unmultiplied(80, 120, 200, 18))
+        .inner_margin(egui::Margin::symmetric(8.0, 3.0))
+        .rounding(egui::Rounding::same(4.0))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.colored_label(egui::Color32::from_rgb(100, 160, 255), "⇕");
+                ui.colored_label(
+                    egui::Color32::from_gray(170),
+                    label,
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.add(
+                        egui::DragValue::new(height)
+                            .speed(2.0)
+                            .range(80.0..=800.0)
+                            .suffix(" px"),
+                    );
+                    ui.colored_label(egui::Color32::from_gray(130), "drag to resize ·");
+                });
+            });
+        });
+    ui.add_space(2.0);
+}
+
 pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Bond Spreads & Yield Curve");
     ui.add_space(8.0);
@@ -29,8 +55,9 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                     })
                     .collect();
 
+                height_control(ui, &mut state.chart_heights.bond_yield_curve, "Yield Curve Chart Height");
                 Plot::new("yield_curve")
-                    .height(200.0)
+                    .height(state.chart_heights.bond_yield_curve)
                     .allow_drag(true)
                     .allow_zoom(true)
                     .y_axis_label("Yield (%)")
@@ -72,8 +99,9 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             (0..state.analysis.bond_spreads.len()).map(|i| [i as f64, 0.0]),
         );
 
+        height_control(ui, &mut state.chart_heights.bond_term_spread, "Term Spread Chart Height");
         Plot::new("term_spread_plot")
-            .height(200.0)
+            .height(state.chart_heights.bond_term_spread)
             .allow_drag(true)
             .allow_zoom(true)
             .x_axis_label("Trading Day (recent -> past)")
@@ -107,8 +135,9 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .map(|(i, s)| [i as f64, s.curve_slope])
             .collect();
 
+        height_control(ui, &mut state.chart_heights.bond_curve_slope, "Curve Slope Chart Height");
         Plot::new("curve_slope_plot")
-            .height(180.0)
+            .height(state.chart_heights.bond_curve_slope)
             .allow_drag(true)
             .allow_zoom(true)
             .x_axis_label("Trading Day (recent -> past)")

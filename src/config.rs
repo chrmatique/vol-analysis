@@ -16,8 +16,33 @@ pub const SECTOR_ETFS: &[(&str, &str)] = &[
 /// Market benchmark
 pub const BENCHMARK_SYMBOL: &str = "SPY";
 
-/// Financial Modeling Prep API key
-pub const FMP_API_KEY: &str = "";
+/// Financial Modeling Prep API key.
+/// Reads FMP_API_KEY from the environment (set in a gitignored .env file).
+/// Call `load_env()` once at startup to populate the environment from .env.
+pub fn fmp_api_key() -> String {
+    std::env::var("FMP_API_KEY").unwrap_or_default()
+}
+
+/// Load variables from a `.env` file in the working directory into the process
+/// environment. Silent no-op if the file is absent (production builds may rely
+/// on the environment being set externally).
+pub fn load_env() {
+    let Ok(contents) = std::fs::read_to_string(".env") else { return };
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some((key, value)) = line.split_once('=') {
+            let key = key.trim();
+            let value = value.trim();
+            if std::env::var(key).is_err() {
+                // Only set if not already present in the environment
+                unsafe { std::env::set_var(key, value); }
+            }
+        }
+    }
+}
 
 /// Default historical lookback in calendar days (~2 years)
 pub const DEFAULT_LOOKBACK_DAYS: u32 = 730;

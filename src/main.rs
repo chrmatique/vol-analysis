@@ -8,6 +8,7 @@ mod ui;
 use app::MktNoiseApp;
 
 fn main() -> eframe::Result<()> {
+    config::load_env();
     tracing_subscriber::fmt::init();
 
     let options = eframe::NativeOptions {
