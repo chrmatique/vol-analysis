@@ -133,7 +133,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                 if state.loaded_model.is_some() {
                     if ui.button("Run Inference").clicked() {
                         if let Some(ref model) = state.loaded_model {
-                            let preds = crate::nn::training::run_inference(model, &state.market_data);
+                            let preds = crate::nn::training::run_inference(model, &state.market_data, &state.nn_feature_flags);
                             if !preds.is_empty() {
                                 state.nn_predictions = preds.clone();
                                 if let Some(ref meta) = state.model_metadata {
@@ -203,7 +203,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                 if state.loaded_model.is_some() {
                     if ui.button("Run Inference").clicked() {
                         if let Some(ref model) = state.loaded_model {
-                            let preds = crate::nn::training::run_inference(model, &state.market_data);
+                            let preds = crate::nn::training::run_inference(model, &state.market_data, &state.nn_feature_flags);
                             if !preds.is_empty() {
                                 state.nn_predictions = preds.clone();
                             }
@@ -619,8 +619,9 @@ fn start_training(state: &mut AppState) {
 
     let market_data = state.market_data.clone();
     let use_gpu = state.use_gpu;
+    let feature_flags = state.nn_feature_flags.clone();
 
     std::thread::spawn(move || {
-        crate::nn::training::train(&market_data, &progress, use_gpu);
+        crate::nn::training::train(&market_data, &progress, use_gpu, &feature_flags);
     });
 }

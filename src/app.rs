@@ -7,7 +7,7 @@ use crate::config;
 use crate::analysis::randomness::SectorRandomness;
 use crate::data::models::{
     BondSpread, ComputeStats, CorrelationMatrix, GpuAdapterInfo, KurtosisMetrics, MarketData,
-    NnPredictions, TrainingStatus, VolatilityMetrics,
+    NnFeatureFlags, NnPredictions, TrainingStatus, VolatilityMetrics,
 };
 use crate::nn::persistence::ModelMetadata;
 use crate::nn::training::TrainingProgress;
@@ -23,6 +23,7 @@ pub enum Tab {
     Bonds,
     Kurtosis,
     NeuralNet,
+    Settings,
 }
 
 /// Computed analysis results (derived from MarketData)
@@ -116,6 +117,8 @@ pub struct AppState {
     pub available_gpus: Vec<GpuAdapterInfo>,
     /// Shared channel for async data loading results
     pub data_receiver: Option<Arc<Mutex<Option<MarketData>>>>,
+    /// NN training feature flags
+    pub nn_feature_flags: NnFeatureFlags,
 }
 
 impl Default for AppState {
@@ -151,6 +154,7 @@ impl Default for AppState {
             persistence_message: None,
             available_gpus,
             data_receiver: None,
+            nn_feature_flags: NnFeatureFlags::default(),
         }
     }
 }
@@ -350,7 +354,7 @@ impl MktNoiseApp {
 
             // Run inference with loaded model if available (avoids retraining)
             if let Some(ref model) = self.state.loaded_model {
-                let preds = crate::nn::training::run_inference(model, &self.state.market_data);
+                let preds = crate::nn::training::run_inference(model, &self.state.market_data, &self.state.nn_feature_flags);
                 if !preds.is_empty() {
                     self.state.nn_predictions = preds.clone();
                     if let Some(ref meta) = self.state.model_metadata {
@@ -386,6 +390,7 @@ impl eframe::App for MktNoiseApp {
                 ui.selectable_value(&mut self.state.active_tab, Tab::Bonds, "Bonds");
                 ui.selectable_value(&mut self.state.active_tab, Tab::Kurtosis, "Kurtosis");
                 ui.selectable_value(&mut self.state.active_tab, Tab::NeuralNet, "Neural Net");
+                ui.selectable_value(&mut self.state.active_tab, Tab::Settings, "Settings");
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if self.state.is_loading {
@@ -416,6 +421,7 @@ impl eframe::App for MktNoiseApp {
                     Tab::Bonds => ui::bond_view::render(ui, &mut self.state),
                     Tab::Kurtosis => ui::kurtosis_view::render(ui, &mut self.state),
                     Tab::NeuralNet => ui::nn_view::render(ui, &mut self.state),
+                    Tab::Settings => ui::settings_view::render(ui, &mut self.state),
                 });
         });
     }

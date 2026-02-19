@@ -5,7 +5,7 @@ use burn::{
 
 use crate::analysis;
 use crate::config;
-use crate::data::models::MarketData;
+use crate::data::models::{MarketData, NnFeatureFlags};
 
 /// A single training sample: a window of features and targets
 #[derive(Debug, Clone)]
@@ -37,7 +37,7 @@ impl Dataset<VolSample> for VolDataset {
 }
 
 /// Build a dataset from market data by engineering features and creating sliding windows
-pub fn build_dataset(data: &MarketData, lookback: usize, forward: usize) -> VolDataset {
+pub fn build_dataset(data: &MarketData, lookback: usize, forward: usize, flags: &NnFeatureFlags) -> VolDataset {
     // Compute log returns for each sector
     let sector_returns: Vec<Vec<f64>> = data.sectors.iter().map(|s| s.log_returns()).collect();
     let n_sectors = sector_returns.len();
@@ -157,16 +157,18 @@ pub fn build_dataset(data: &MarketData, lookback: usize, forward: usize) -> VolD
         for t in start..end {
             let mut features = Vec::with_capacity(crate::nn::model::NUM_FEATURES);
 
-            // 11 sector volatilities
-            for sv in &aligned_vols {
-                features.push(sv.get(t).copied().unwrap_or(0.0));
-            }
-            // Pad if fewer sectors
-            for _ in n_sectors..11 {
-                features.push(0.0);
+            // 11 sector volatilities (enabled by flag)
+            if flags.sector_volatility {
+                for sv in &aligned_vols {
+                    features.push(sv.get(t).copied().unwrap_or(0.0));
+                }
+            } else {
+                for _ in 0..11 {
+                    features.push(0.0);
+                }
             }
 
-            // 11 sector returns
+            // 11 sector returns (always included, base features)
             for sr in &aligned_rets {
                 features.push(sr.get(t).copied().unwrap_or(0.0));
             }
@@ -174,16 +176,16 @@ pub fn build_dataset(data: &MarketData, lookback: usize, forward: usize) -> VolD
                 features.push(0.0);
             }
 
-            // Average cross-sector correlation
+            // Average cross-sector correlation (base feature)
             features.push(avg_corr);
 
-            // Bond spread (10Y-2Y)
+            // Bond spread (10Y-2Y) (base feature)
             features.push(spread_vals.get(t).copied().unwrap_or(0.0));
 
-            // Curve slope
+            // Curve slope (base feature)
             features.push(slope_vals.get(t).copied().unwrap_or(0.0));
 
-            // VIX proxy (benchmark vol)
+            // VIX proxy (benchmark vol) (base feature)
             features.push(
                 bench_v
                     .as_ref()
@@ -191,38 +193,48 @@ pub fn build_dataset(data: &MarketData, lookback: usize, forward: usize) -> VolD
                     .unwrap_or(0.0),
             );
 
-            // Randomness: entropy, hurst per sector (2 × 11 = 22)
-            // rolling_randomness[t-20] aligns with vol[t]; pad with idx 0 when t < 20
-            let rr_len = sector_randomness.first().map(|v| v.len()).unwrap_or(0);
-            let rr_idx = if t >= randomness_window - 1 && rr_len > 0 {
-                (t - (randomness_window - 1)).min(rr_len - 1)
-            } else {
-                0
-            };
-            for sr in &sector_randomness {
-                if let Some(&(entropy, hurst, _ac1, _ac5)) = sr.get(rr_idx) {
-                    features.push(entropy);
-                    features.push(hurst);
+            // Randomness: entropy, hurst per sector (2 × 11 = 22) (enabled by flag)
+            if flags.market_randomness {
+                let rr_len = sector_randomness.first().map(|v| v.len()).unwrap_or(0);
+                let rr_idx = if t >= randomness_window - 1 && rr_len > 0 {
+                    (t - (randomness_window - 1)).min(rr_len - 1)
                 } else {
+                    0
+                };
+                for sr in &sector_randomness {
+                    if let Some(&(entropy, hurst, _ac1, _ac5)) = sr.get(rr_idx) {
+                        features.push(entropy);
+                        features.push(hurst);
+                    } else {
+                        features.push(0.0);
+                        features.push(0.0);
+                    }
+                }
+                for _ in n_sectors..11 {
                     features.push(0.0);
                     features.push(0.0);
                 }
-            }
-            for _ in n_sectors..11 {
-                features.push(0.0);
-                features.push(0.0);
+            } else {
+                for _ in 0..(11 * 2) {
+                    features.push(0.0);
+                }
             }
 
-            // Kurtosis: rolling_kurtosis, rolling_skewness per sector (2 × 11 = 22)
-            // rolling_kurt at [t-62] aligns with vol[t]; pad with 0 when t < 62
-            let k_idx = t.saturating_sub(config::LONG_VOL_WINDOW - 1);
-            for (rk, rs) in sector_rolling_kurt.iter().zip(sector_rolling_skew.iter()) {
-                features.push(rk.get(k_idx).copied().unwrap_or(0.0));
-                features.push(rs.get(k_idx).copied().unwrap_or(0.0));
-            }
-            for _ in n_sectors..11 {
-                features.push(0.0);
-                features.push(0.0);
+            // Kurtosis: rolling_kurtosis, rolling_skewness per sector (2 × 11 = 22) (enabled by flag)
+            if flags.kurtosis {
+                let k_idx = t.saturating_sub(config::LONG_VOL_WINDOW - 1);
+                for (rk, rs) in sector_rolling_kurt.iter().zip(sector_rolling_skew.iter()) {
+                    features.push(rk.get(k_idx).copied().unwrap_or(0.0));
+                    features.push(rs.get(k_idx).copied().unwrap_or(0.0));
+                }
+                for _ in n_sectors..11 {
+                    features.push(0.0);
+                    features.push(0.0);
+                }
+            } else {
+                for _ in 0..(11 * 2) {
+                    features.push(0.0);
+                }
             }
 
             window_features.push(features);

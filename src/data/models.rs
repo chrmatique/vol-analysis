@@ -197,6 +197,24 @@ impl Default for TrainingStatus {
     }
 }
 
+/// Neural network feature flags for toggling input feature groups during training
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NnFeatureFlags {
+    pub sector_volatility: bool,
+    pub market_randomness: bool,
+    pub kurtosis: bool,
+}
+
+impl Default for NnFeatureFlags {
+    fn default() -> Self {
+        Self {
+            sector_volatility: true,
+            market_randomness: true,
+            kurtosis: true,
+        }
+    }
+}
+
 /// Application-wide market data state
 #[derive(Debug, Clone, Default)]
 pub struct MarketData {

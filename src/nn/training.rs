@@ -58,7 +58,7 @@ impl TrainingProgress {
 }
 
 /// Run the full training pipeline, selecting GPU or CPU backend.
-pub fn train(market_data: &MarketData, progress: &TrainingProgress, use_gpu: bool) {
+pub fn train(market_data: &MarketData, progress: &TrainingProgress, use_gpu: bool, feature_flags: &crate::data::models::NnFeatureFlags) {
     // Prefer vendor-specific stats (NVIDIA via nvidia-smi, AMD via rocm-smi/amd-smi)
     let gpu_stats = crate::nn::gpu::poll_gpu_stats();
     let adapter_name = crate::nn::gpu::detect_wgpu_adapters()
@@ -99,7 +99,7 @@ pub fn train(market_data: &MarketData, progress: &TrainingProgress, use_gpu: boo
 
         tracing::info!("Starting GPU training with Wgpu backend");
         let device = <Wgpu as burn::tensor::backend::Backend>::Device::default();
-        train_impl::<GpuBackend>(device, market_data, progress);
+        train_impl::<GpuBackend>(device, market_data, progress, feature_flags);
     } else {
         if let Ok(mut stats) = progress.compute_stats.lock() {
             stats.backend_name = "NdArray (CPU) + Autodiff".to_string();
@@ -108,7 +108,7 @@ pub fn train(market_data: &MarketData, progress: &TrainingProgress, use_gpu: boo
 
         tracing::info!("Starting CPU training with NdArray backend");
         let device = <NdArray as burn::tensor::backend::Backend>::Device::default();
-        train_impl::<CpuBackend>(device, market_data, progress);
+        train_impl::<CpuBackend>(device, market_data, progress, feature_flags);
     }
 }
 
@@ -117,6 +117,7 @@ fn train_impl<B: AutodiffBackend>(
     device: B::Device,
     market_data: &MarketData,
     progress: &TrainingProgress,
+    feature_flags: &crate::data::models::NnFeatureFlags,
 ) {
     // System info for compute stats
     let mut sys = System::new_all();
@@ -131,7 +132,7 @@ fn train_impl<B: AutodiffBackend>(
     });
 
     // Build dataset
-    let dataset = build_dataset(market_data, config::NN_LOOKBACK_DAYS, config::NN_FORWARD_DAYS);
+    let dataset = build_dataset(market_data, config::NN_LOOKBACK_DAYS, config::NN_FORWARD_DAYS, feature_flags);
 
     if dataset.samples.is_empty() {
         set_status(progress, TrainingStatus::Error(
@@ -284,7 +285,7 @@ fn train_impl<B: AutodiffBackend>(
     // Generate predictions using the trained model in inference mode
     let valid_model = model.valid();
     let inference_device = <B::InnerBackend as burn::tensor::backend::Backend>::Device::default();
-    generate_predictions::<B::InnerBackend>(&valid_model, market_data, &inference_device, progress);
+    generate_predictions::<B::InnerBackend>(&valid_model, market_data, &inference_device, progress, feature_flags);
 
     // Save model to disk BEFORE setting Complete status so the UI's load_model()
     // call is guaranteed to find the file on the very first repaint after Complete.
@@ -346,17 +347,19 @@ fn mse_loss<B: AutodiffBackend>(
 pub fn run_inference(
     model: &crate::nn::model::VolPredictionModel<burn::backend::NdArray>,
     market_data: &MarketData,
+    feature_flags: &crate::data::models::NnFeatureFlags,
 ) -> NnPredictions {
     let device = <burn::backend::NdArray as burn::tensor::backend::Backend>::Device::default();
-    run_inference_impl(model, market_data, &device)
+    run_inference_impl(model, market_data, &device, feature_flags)
 }
 
 fn run_inference_impl<B: burn::tensor::backend::Backend>(
     model: &crate::nn::model::VolPredictionModel<B>,
     market_data: &MarketData,
     device: &B::Device,
+    feature_flags: &crate::data::models::NnFeatureFlags,
 ) -> NnPredictions {
-    let dataset = build_dataset(market_data, config::NN_LOOKBACK_DAYS, config::NN_FORWARD_DAYS);
+    let dataset = build_dataset(market_data, config::NN_LOOKBACK_DAYS, config::NN_FORWARD_DAYS, feature_flags);
 
     if let Some(last_sample) = dataset.samples.last() {
         let seq_len = last_sample.features.len();
@@ -415,8 +418,9 @@ fn generate_predictions<B: burn::tensor::backend::Backend>(
     market_data: &MarketData,
     device: &B::Device,
     progress: &TrainingProgress,
+    feature_flags: &crate::data::models::NnFeatureFlags,
 ) {
-    let predictions = run_inference_impl(model, market_data, device);
+    let predictions = run_inference_impl(model, market_data, device, feature_flags);
     if let Ok(mut preds) = progress.predictions.lock() {
         *preds = predictions;
     }
