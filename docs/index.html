@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>mkt-noise-analysis — Codebase Map</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-dim: #388bfd66;
+      --green: #3fb950;
+      --orange: #d29922;
+      --red: #f85149;
+      --purple: #a371f7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      margin: 0;
+      padding: 2rem;
+      max-width: 1200px;
+      margin-inline: auto;
+    }
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-bottom: 2rem;
+    }
+    h2 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-top: 2.5rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+    .mermaid {
+      background: var(--surface) !important;
+    }
+    .file-tree {
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 0.9rem;
+      line-height: 1.7;
+    }
+    .file-tree .dir { color: var(--accent); }
+    .file-tree .file { color: var(--text); }
+    .file-tree .file.rs { color: var(--green); }
+    .file-tree .file.toml { color: var(--orange); }
+    .file-tree .file.md { color: var(--text-muted); }
+    .file-tree ul { list-style: none; margin: 0; padding-left: 1.25rem; }
+    .file-tree li { margin: 0.15em 0; }
+    .dep-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .dep-table th, .dep-table td {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .dep-table th { color: var(--text-muted); font-weight: 500; }
+    .dep-table .category { color: var(--purple); font-size: 0.85rem; }
+    .module-card {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 768px) { .module-card { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+    }
+    .card h3 {
+      font-size: 1rem;
+      margin: 0 0 0.5rem 0;
+      color: var(--accent);
+    }
+    .card p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+    .card ul {
+      margin: 0.5rem 0 0 0;
+      padding-left: 1.25rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <h1>mkt-noise-analysis</h1>
+  <p class="subtitle">Market structure volatility analyzer — visual codebase map · <a href="file-reference.html" style="color: var(--accent);">File reference</a></p>
+
+  <section>
+    <h2>Module dependency flow</h2>
+    <div class="mermaid">
+flowchart TB
+  subgraph main["main.rs"]
+    M[main.rs]
+  end
+  C[config]
+  subgraph app["app"]
+    A[app.rs]
+  end
+  subgraph data["data"]
+    D1[cache.rs]
+    D2[fmp.rs]
+    D3[models.rs]
+    D4[yahoo.rs]
+    D1 --> D2
+    D1 --> D4
+    D2 --> D3
+    D4 --> D3
+  end
+  subgraph analysis["analysis"]
+    A1[volatility.rs]
+    A2[cross_sector.rs]
+    A3[bond_spreads.rs]
+    A4[kurtosis.rs]
+    A5[randomness.rs]
+    A1 --> D3
+    A2 --> D3
+    A3 --> D3
+    A4 --> D3
+    A5 --> D3
+  end
+  subgraph nn["nn"]
+    N1[dataset.rs]
+    N2[model.rs]
+    N3[training.rs]
+    N4[persistence.rs]
+    N5[gpu.rs]
+    N1 --> D3
+    N1 --> A1
+    N2 --> N3
+    N3 --> N1
+    N3 --> N2
+    N4 --> D1
+    N4 --> N2
+  end
+  subgraph ui["ui"]
+    U1[dashboard.rs]
+    U2[sector_view.rs]
+    U3[correlation_view.rs]
+    U4[bond_view.rs]
+    U5[kurtosis_view.rs]
+    U6[nn_view.rs]
+    U7[settings_view.rs]
+    U8[chart_utils.rs]
+    U2 --> U8
+    U4 --> U8
+    U5 --> U8
+    U6 --> U8
+  end
+  M --> A
+  M --> C
+  A --> data
+  A --> analysis
+  A --> nn
+  A --> ui
+  A --> C[config]
+  </div>
+  </section>
+
+  <section>
+    <h2>File tree</h2>
+    <div class="file-tree">
+      <ul>
+        <li class="dir">mkt-noise-analysis/</li>
+        <li><ul>
+          <li class="file toml">Cargo.toml</li>
+          <li class="file md">README.md</li>
+          <li class="dir">src/</li>
+          <li><ul>
+            <li class="file rs">main.rs</li>
+            <li class="file rs">app.rs</li>
+            <li class="file rs">config.rs</li>
+            <li class="dir">data/</li>
+            <li><ul>
+              <li class="file rs">mod.rs</li>
+              <li class="file rs">cache.rs</li>
+              <li class="file rs">fmp.rs</li>
+              <li class="file rs">models.rs</li>
+              <li class="file rs">yahoo.rs</li>
+            </ul></li>
+            <li class="dir">analysis/</li>
+            <li><ul>
+              <li class="file rs">mod.rs</li>
+              <li class="file rs">volatility.rs</li>
+              <li class="file rs">cross_sector.rs</li>
+              <li class="file rs">bond_spreads.rs</li>
+              <li class="file rs">kurtosis.rs</li>
+              <li class="file rs">randomness.rs</li>
+            </ul></li>
+            <li class="dir">nn/</li>
+            <li><ul>
+              <li class="file rs">mod.rs</li>
+              <li class="file rs">dataset.rs</li>
+              <li class="file rs">model.rs</li>
+              <li class="file rs">training.rs</li>
+              <li class="file rs">persistence.rs</li>
+              <li class="file rs">gpu.rs</li>
+            </ul></li>
+            <li class="dir">ui/</li>
+            <li><ul>
+              <li class="file rs">mod.rs</li>
+              <li class="file rs">dashboard.rs</li>
+              <li class="file rs">sector_view.rs</li>
+              <li class="file rs">correlation_view.rs</li>
+              <li class="file rs">bond_view.rs</li>
+              <li class="file rs">kurtosis_view.rs</li>
+              <li class="file rs">nn_view.rs</li>
+              <li class="file rs">settings_view.rs</li>
+              <li class="file rs">chart_utils.rs</li>
+            </ul></li>
+          </ul></li>
+          <li class="dir">cache/</li>
+          <li><ul>
+            <li class="file">yahoo_*.json</li>
+            <li class="file">fmp_*.json</li>
+          </ul></li>
+        </ul></li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Module overview</h2>
+    <div class="module-card">
+      <div class="card">
+        <h3>app</h3>
+        <p>Application shell, tab routing, AppState, async data fetch.</p>
+        <ul>
+          <li>MktNoiseApp, Tab enum, AppState</li>
+          <li>ChartHeights, Plot3DState, TrainingStatus</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>config</h3>
+        <p>Sector ETFs, window sizes, NN params, .env loading.</p>
+        <ul>
+          <li>SECTOR_ETFS, SHORT_VOL_WINDOW, LONG_VOL_WINDOW</li>
+          <li>fmp_api_key(), load_env()</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>data</h3>
+        <p>Yahoo & FMP fetching, caching, MarketData models.</p>
+        <ul>
+          <li>yahoo.rs — OHLCV, sector ETFs</li>
+          <li>fmp.rs — treasury rates, sector performance</li>
+          <li>models.rs — MarketData, VolatilityMetrics, BondSpread, etc.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>analysis</h3>
+        <p>Volatility, correlation, bond spreads, kurtosis, randomness.</p>
+        <ul>
+          <li>volatility.rs — short/long rolling vol</li>
+          <li>cross_sector.rs — correlation matrix</li>
+          <li>bond_spreads.rs — 10Y-2Y, yield curve</li>
+          <li>kurtosis.rs, randomness.rs</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>nn</h3>
+        <p>Burn-based neural network: dataset, model, training, persistence.</p>
+        <ul>
+          <li>dataset.rs — build_dataset, VolBatcher</li>
+          <li>model.rs — VolPredictionModel (LSTM)</li>
+          <li>training.rs — train, run_inference</li>
+          <li>persistence.rs, gpu.rs</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>ui</h3>
+        <p>eframe/egui views: Dashboard, Sector Vol, Correlations, Bonds, Kurtosis, NN, Settings.</p>
+        <ul>
+          <li>dashboard.rs — 3D probability plot</li>
+          <li>sector_view, bond_view, kurtosis_view — charts</li>
+          <li>nn_view — training UI, predictions</li>
+          <li>chart_utils.rs — shared height_control</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cargo dependencies</h2>
+    <table class="dep-table">
+      <thead>
+        <tr><th>Category</th><th>Crate</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="category">GUI</td><td>eframe</td><td>egui desktop app (0.30)</td></tr>
+        <tr><td class="category">GUI</td><td>egui_plot</td><td>Plots in egui (0.30)</td></tr>
+        <tr><td class="category">Async</td><td>tokio</td><td>Async runtime</td></tr>
+        <tr><td class="category">Data</td><td>yahoo_finance_api</td><td>Yahoo Finance OHLCV</td></tr>
+        <tr><td class="category">Data</td><td>reqwest</td><td>HTTP client (FMP API)</td></tr>
+        <tr><td class="category">Serde</td><td>serde, serde_json</td><td>Serialize/deserialize</td></tr>
+        <tr><td class="category">Serde</td><td>chrono, time</td><td>Dates, timestamps</td></tr>
+        <tr><td class="category">NN</td><td>burn</td><td>Deep learning (wgpu, train, ndarray)</td></tr>
+        <tr><td class="category">NN</td><td>wgpu</td><td>GPU backend</td></tr>
+        <tr><td class="category">Plot</td><td>plotters</td><td>3D dashboard plot</td></tr>
+        <tr><td class="category">Utils</td><td>sysinfo, directories, tracing, anyhow</td><td>System info, config, logging</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Data flow</h2>
+    <div class="mermaid">
+flowchart LR
+  subgraph ext["External APIs"]
+    YH[Yahoo Finance]
+    FMP[Financial Modeling Prep]
+  end
+  subgraph data["data"]
+    cache[cache]
+    yahoo[yahoo]
+    fmp[fmp]
+    models[models]
+  end
+  subgraph app["app"]
+    state[AppState]
+  end
+  subgraph analysis["analysis"]
+    vol[volatility]
+    corr[cross_sector]
+    bonds[bond_spreads]
+    kurt[kurtosis]
+    rand[randomness]
+  end
+  subgraph nn["nn"]
+    ds[dataset]
+    train[training]
+  end
+  subgraph ui["ui"]
+    views[7 tab views]
+  end
+  YH --> yahoo
+  FMP --> fmp
+  yahoo --> cache
+  fmp --> cache
+  yahoo --> models
+  fmp --> models
+  models --> state
+  state --> vol
+  state --> corr
+  state --> bonds
+  state --> kurt
+  state --> rand
+  vol --> state
+  corr --> state
+  bonds --> state
+  kurt --> state
+  rand --> state
+  state --> ds
+  ds --> train
+  train --> state
+  state --> views
+  </div>
+  </section>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor: '#388bfd',
+        primaryTextColor: '#e6edf3',
+        primaryBorderColor: '#30363d',
+        lineColor: '#8b949e',
+        secondaryColor: '#161b22',
+        tertiaryColor: '#0d1117'
+      }
+    });
+  </script>
+</body>
+</html>

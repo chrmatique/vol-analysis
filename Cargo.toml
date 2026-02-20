@@ -33,6 +33,9 @@ plotters = "0.3"
 # System info
 sysinfo = "0.32"
 
+# Image encoding (screenshots)
+image = "0.25"
+
 # Utilities
 directories = "5"
 tracing = "0.1"

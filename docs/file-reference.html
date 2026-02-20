@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Reference — mkt-noise-analysis</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #58a6ff;
+      --green: #3fb950;
+    }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      margin: 0;
+      padding: 2rem;
+      max-width: 900px;
+      margin-inline: auto;
+    }
+    h1 { font-size: 1.5rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .back { margin-bottom: 1.5rem; color: var(--text-muted); font-size: 0.9rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+    th { color: var(--text-muted); font-weight: 500; font-size: 0.85rem; }
+    .path { font-family: Consolas, monospace; font-size: 0.9rem; color: var(--green); }
+  </style>
+</head>
+<body>
+  <div class="back"><a href="index.html">← Back to codebase map</a></div>
+  <h1>File reference</h1>
+  <p style="color: var(--text-muted);">All Rust source files with descriptions.</p>
+
+  <table>
+    <thead>
+      <tr><th>Path</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="path">src/main.rs</td><td>Binary entry; eframe setup, tab routing</td></tr>
+      <tr><td class="path">src/app.rs</td><td>MktNoiseApp, AppState, analysis orchestration, async data fetch</td></tr>
+      <tr><td class="path">src/config.rs</td><td>Sector ETFs, windows, NN params, .env loading</td></tr>
+      <tr><td class="path">src/data/mod.rs</td><td>data crate module</td></tr>
+      <tr><td class="path">src/data/cache.rs</td><td>Yahoo/FMP response caching</td></tr>
+      <tr><td class="path">src/data/fmp.rs</td><td>FMP API: treasury rates, sector performance</td></tr>
+      <tr><td class="path">src/data/models.rs</td><td>MarketData, VolatilityMetrics, BondSpread, CorrelationMatrix, etc.</td></tr>
+      <tr><td class="path">src/data/yahoo.rs</td><td>Yahoo Finance OHLCV and sector ETF fetching</td></tr>
+      <tr><td class="path">src/analysis/mod.rs</td><td>analysis module</td></tr>
+      <tr><td class="path">src/analysis/bond_spreads.rs</td><td>Term spread, yield curve, inversion detection</td></tr>
+      <tr><td class="path">src/analysis/cross_sector.rs</td><td>Correlation matrix, cross-sector correlation</td></tr>
+      <tr><td class="path">src/analysis/kurtosis.rs</td><td>Kurtosis, skewness, Jarque-Bera, KDE density</td></tr>
+      <tr><td class="path">src/analysis/randomness.rs</td><td>Sector randomness / entropy metrics</td></tr>
+      <tr><td class="path">src/analysis/volatility.rs</td><td>Sector volatility (short/long windows, Parkinson)</td></tr>
+      <tr><td class="path">src/nn/mod.rs</td><td>nn module, LoadedModel alias</td></tr>
+      <tr><td class="path">src/nn/dataset.rs</td><td>NN dataset construction, feature engineering</td></tr>
+      <tr><td class="path">src/nn/gpu.rs</td><td>WGPU adapter detection</td></tr>
+      <tr><td class="path">src/nn/model.rs</td><td>VolPredictionModel (LSTM), config</td></tr>
+      <tr><td class="path">src/nn/persistence.rs</td><td>Save/load trained models</td></tr>
+      <tr><td class="path">src/nn/training.rs</td><td>Training loop, inference</td></tr>
+      <tr><td class="path">src/ui/mod.rs</td><td>ui module</td></tr>
+      <tr><td class="path">src/ui/bond_view.rs</td><td>Bonds tab: yield curve, term spread, curve slope</td></tr>
+      <tr><td class="path">src/ui/chart_utils.rs</td><td>Shared chart helpers (height_control)</td></tr>
+      <tr><td class="path">src/ui/correlation_view.rs</td><td>Correlations tab: matrix grid</td></tr>
+      <tr><td class="path">src/ui/dashboard.rs</td><td>Dashboard: 3D probability distribution plot</td></tr>
+      <tr><td class="path">src/ui/kurtosis_view.rs</td><td>Kurtosis tab: distribution, rolling kurtosis/skewness</td></tr>
+      <tr><td class="path">src/ui/nn_view.rs</td><td>Neural Net tab: training UI, predictions</td></tr>
+      <tr><td class="path">src/ui/sector_view.rs</td><td>Sector Vol tab: price, volatility, ratio charts</td></tr>
+      <tr><td class="path">src/ui/settings_view.rs</td><td>Settings tab: NN feature flags</td></tr>
+    </tbody>
+  </table>
+</body>
+</html>

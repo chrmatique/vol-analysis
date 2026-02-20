@@ -84,22 +84,35 @@ pub fn train(market_data: &MarketData, progress: &TrainingProgress, use_gpu: boo
     }
 
     if use_gpu {
-        let backend_label = format!(
-            "WGPU GPU: {}",
-            gpu_stats
-                .as_ref()
-                .map(|i| i.name.as_str())
-                .or(adapter_name.as_deref())
-                .unwrap_or("Default")
-        );
-        if let Ok(mut stats) = progress.compute_stats.lock() {
-            stats.backend_name = backend_label;
-            stats.using_gpu = true;
-        }
+        match crate::nn::gpu::validate_gpu() {
+            Ok(gpu_name) => {
+                let backend_label = format!(
+                    "WGPU GPU: {}",
+                    gpu_stats
+                        .as_ref()
+                        .map(|i| i.name.as_str())
+                        .unwrap_or(&gpu_name)
+                );
+                if let Ok(mut stats) = progress.compute_stats.lock() {
+                    stats.backend_name = backend_label;
+                    stats.using_gpu = true;
+                }
 
-        tracing::info!("Starting GPU training with Wgpu backend");
-        let device = <Wgpu as burn::tensor::backend::Backend>::Device::default();
-        train_impl::<GpuBackend>(device, market_data, progress, feature_flags);
+                tracing::info!("GPU validation passed ({}). Starting GPU training.", gpu_name);
+                let device = <Wgpu as burn::tensor::backend::Backend>::Device::default();
+                train_impl::<GpuBackend>(device, market_data, progress, feature_flags);
+            }
+            Err(reason) => {
+                tracing::warn!("GPU validation failed: {}. Falling back to CPU.", reason);
+                if let Ok(mut stats) = progress.compute_stats.lock() {
+                    stats.backend_name = format!("CPU (fallback: {})", reason);
+                    stats.using_gpu = false;
+                    stats.gpu_detected = false;
+                }
+                let device = <NdArray as burn::tensor::backend::Backend>::Device::default();
+                train_impl::<CpuBackend>(device, market_data, progress, feature_flags);
+            }
+        }
     } else {
         if let Ok(mut stats) = progress.compute_stats.lock() {
             stats.backend_name = "NdArray (CPU) + Autodiff".to_string();

@@ -35,6 +35,27 @@ pub async fn fetch_treasury_rates(api_key: &str) -> Result<Vec<TreasuryRate>> {
     Ok(rates)
 }
 
+/// Test for fetch_treasury_rates: fetches, prints JSON to debug terminal.
+/// `cargo test -- --nocapture fetch_treasury_rates_dump_json` to see output.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn fetch_treasury_rates_dump_json() {
+        let api_key = "";
+        let res = fetch_treasury_rates(&api_key).await;
+        match res {
+            Ok(rates) => {
+                let json = serde_json::to_string_pretty(&rates).unwrap();
+                // Print to debug terminal
+                println!("{}", json);
+            }
+            Err(e) => panic!("fetch_treasury_rates failed: {:?}", e),
+        }
+    }
+}
+
 /// Fetch sector performance from FMP stable sector-performance-snapshot endpoint.
 /// Tries recent business days until data is found.
 pub async fn fetch_sector_performance(api_key: &str) -> Result<Vec<SectorPerformance>> {

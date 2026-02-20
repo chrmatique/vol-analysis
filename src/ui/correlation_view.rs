@@ -25,6 +25,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     let cell_size = 48.0;
 
     egui::ScrollArea::both().show(ui, |ui| {
+        // ID: <mgrid>
         egui::Grid::new("corr_matrix")
             .min_col_width(cell_size)
             .max_col_width(cell_size)
@@ -67,6 +68,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                     ui.end_row();
                 }
             });
+            // ID: </mgrid>
     });
 
     ui.add_space(16.0);

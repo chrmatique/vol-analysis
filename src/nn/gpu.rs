@@ -63,6 +63,40 @@ pub fn poll_gpu_stats() -> Option<GpuInfo> {
     detect_nvidia_gpu().or_else(detect_amd_gpu)
 }
 
+/// Validate that the WGPU GPU backend is usable by running a small tensor computation.
+///
+/// Performs a 4×4 matrix multiply on the WGPU device to verify allocation, compute,
+/// and readback. Returns the adapter name on success or an error description on failure.
+/// Call this before starting GPU training to gate on a known-good backend.
+pub fn validate_gpu() -> Result<String, String> {
+    use burn::backend::Wgpu;
+    use burn::tensor::Tensor;
+    type B = Wgpu;
+
+    let device = <B as burn::tensor::backend::Backend>::Device::default();
+
+    // 4×4 matmul: ones × ones = all 4.0 -- tests allocation, compute, and readback
+    let a = Tensor::<B, 2>::ones([4, 4], &device);
+    let b = Tensor::<B, 2>::ones([4, 4], &device);
+    let c = a.matmul(b);
+    let vals = c
+        .into_data()
+        .to_vec::<f32>()
+        .map_err(|e| format!("GPU tensor readback failed: {e:?}"))?;
+
+    if vals.len() != 16 || vals.iter().any(|&v| (v - 4.0).abs() > 0.01) {
+        return Err("GPU computation produced incorrect results".into());
+    }
+
+    let name = detect_wgpu_adapters()
+        .into_iter()
+        .next()
+        .map(|a| a.name)
+        .unwrap_or_else(|| "Unknown GPU".into());
+
+    Ok(name)
+}
+
 fn query_nvidia_smi() -> Option<GpuInfo> {
     let output = Command::new("nvidia-smi")
         .args([
@@ -297,6 +331,22 @@ mod tests {
                 utilization_percent: 45.0,
                 temperature_c: 62.0,
             })
+        }
+    }
+
+    /// validate_gpu() must return Ok or Err without panicking -- even on CI machines
+    /// without a real GPU (WGPU will fall back to its software/null adapter).
+    #[test]
+    fn validate_gpu_does_not_panic() {
+        let result = validate_gpu();
+        // We only assert the absence of a panic; Ok vs Err depends on the host GPU.
+        match result {
+            Ok(name) => {
+                assert!(!name.is_empty(), "GPU name should be non-empty on success");
+            }
+            Err(reason) => {
+                assert!(!reason.is_empty(), "Error message should be non-empty on failure");
+            }
         }
     }
 

@@ -7,7 +7,7 @@ use crate::config;
 use crate::analysis::randomness::SectorRandomness;
 use crate::data::models::{
     BondSpread, ComputeStats, CorrelationMatrix, GpuAdapterInfo, KurtosisMetrics, MarketData,
-    NnFeatureFlags, NnPredictions, TrainingStatus, VolatilityMetrics,
+    NnFeatureFlags, NnPredictions, ScreenshotSettings, TrainingStatus, VolatilityMetrics,
 };
 use crate::nn::persistence::ModelMetadata;
 use crate::nn::training::TrainingProgress;
@@ -119,6 +119,10 @@ pub struct AppState {
     pub data_receiver: Option<Arc<Mutex<Option<MarketData>>>>,
     /// NN training feature flags
     pub nn_feature_flags: NnFeatureFlags,
+    /// Screenshot capture settings (save path, format, compression)
+    pub screenshot_settings: ScreenshotSettings,
+    /// Result slot for the async native folder-picker dialog
+    pub folder_picker_result: Option<Arc<Mutex<Option<String>>>>,
 }
 
 impl Default for AppState {
@@ -155,6 +159,9 @@ impl Default for AppState {
             available_gpus,
             data_receiver: None,
             nn_feature_flags: NnFeatureFlags::default(),
+            screenshot_settings: crate::data::cache::load_json("screenshot_settings.json")
+                .unwrap_or_default(),
+            folder_picker_result: None,
         }
     }
 }
@@ -253,6 +260,82 @@ pub struct MktNoiseApp {
     pub tokio_rt: tokio::runtime::Runtime,
 }
 
+/// Encode and write a screenshot to disk under `settings.save_path`.
+///
+/// The filename is `YYYYMMDD_HHMMSS.{ext}`. Returns the full path on success.
+fn save_screenshot(
+    image: &egui::ColorImage,
+    settings: &ScreenshotSettings,
+) -> Result<String, String> {
+    use std::io::BufWriter;
+    use crate::data::models::{ScreenshotCompression, ScreenshotFileType};
+
+    std::fs::create_dir_all(&settings.save_path)
+        .map_err(|e| format!("Failed to create directory '{}': {}", settings.save_path, e))?;
+
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
+    let ext = match settings.file_type {
+        ScreenshotFileType::Png => "png",
+        ScreenshotFileType::Jpeg => "jpg",
+        ScreenshotFileType::Tiff => "tif",
+    };
+    let path = std::path::Path::new(&settings.save_path).join(format!("{timestamp}.{ext}"));
+
+    let width = image.size[0] as u32;
+    let height = image.size[1] as u32;
+    let pixels: Vec<u8> = image
+        .pixels
+        .iter()
+        .flat_map(|c| [c.r(), c.g(), c.b(), c.a()])
+        .collect();
+    let rgba = image::RgbaImage::from_raw(width, height, pixels)
+        .ok_or_else(|| "Failed to create image buffer from pixel data".to_string())?;
+
+    let file = std::fs::File::create(&path)
+        .map_err(|e| format!("Failed to create file '{}': {}", path.display(), e))?;
+    let mut writer = BufWriter::new(file);
+
+    match settings.file_type {
+        ScreenshotFileType::Png => {
+            use image::codecs::png::{CompressionType, FilterType, PngEncoder};
+            let compression = match settings.compression {
+                ScreenshotCompression::None => CompressionType::Fast,
+                ScreenshotCompression::Low => CompressionType::Default,
+                ScreenshotCompression::High => CompressionType::Best,
+            };
+            let encoder = PngEncoder::new_with_quality(&mut writer, compression, FilterType::Sub);
+            image::DynamicImage::ImageRgba8(rgba)
+                .write_with_encoder(encoder)
+                .map_err(|e| format!("PNG encode failed: {e}"))?;
+        }
+        ScreenshotFileType::Jpeg => {
+            use image::codecs::jpeg::JpegEncoder;
+            let quality: u8 = match settings.compression {
+                ScreenshotCompression::None => 100,
+                ScreenshotCompression::Low => 80,
+                ScreenshotCompression::High => 50,
+            };
+            // JPEG does not support an alpha channel — convert to RGB first
+            let rgb = image::DynamicImage::ImageRgba8(rgba).to_rgb8();
+            let encoder = JpegEncoder::new_with_quality(&mut writer, quality);
+            image::DynamicImage::ImageRgb8(rgb)
+                .write_with_encoder(encoder)
+                .map_err(|e| format!("JPEG encode failed: {e}"))?;
+        }
+        ScreenshotFileType::Tiff => {
+            use image::codecs::tiff::TiffEncoder;
+            // TIFF compression is not directly controllable via this encoder; the
+            // compression setting is informational (visible in the settings tooltip).
+            let encoder = TiffEncoder::new(&mut writer);
+            image::DynamicImage::ImageRgba8(rgba)
+                .write_with_encoder(encoder)
+                .map_err(|e| format!("TIFF encode failed: {e}"))?;
+        }
+    }
+
+    Ok(path.to_string_lossy().into_owned())
+}
+
 impl Default for MktNoiseApp {
     fn default() -> Self {
         let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
@@ -306,7 +389,7 @@ impl MktNoiseApp {
             // Fetch treasury rates
             match crate::data::fmp::fetch_treasury_rates(&config::fmp_api_key()).await {
                 Ok(rates) => market_data.treasury_rates = rates,
-                Err(e) => tracing::warn!("Failed to fetch treasury rates: {}", e),
+                Err(e) => tracing::warn!("Failed to fetch treasury rates: {:?}", e),
             }
 
             // Fetch sector performance
@@ -377,6 +460,32 @@ impl eframe::App for MktNoiseApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
 
+        // Drain the folder-picker result (written by background thread after dialog closes)
+        let picked = self
+            .state
+            .folder_picker_result
+            .as_ref()
+            .and_then(|slot| slot.lock().ok()?.take());
+        if let Some(path) = picked {
+            self.state.screenshot_settings.save_path = path;
+            self.state.folder_picker_result = None;
+        }
+
+        // Handle screenshot events from ViewportCommand::Screenshot (arrives on next frame)
+        let events: Vec<egui::Event> = ctx.input(|i| i.events.clone());
+        for event in &events {
+            if let egui::Event::Screenshot { image, .. } = event {
+                match save_screenshot(image, &self.state.screenshot_settings) {
+                    Ok(path) => {
+                        self.state.status_message = format!("Screenshot saved: {}", path);
+                    }
+                    Err(e) => {
+                        self.state.status_message = format!("Screenshot failed: {}", e);
+                    }
+                }
+            }
+        }
+
         // Top panel with tabs
         egui::TopBottomPanel::top("tab_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -398,6 +507,14 @@ impl eframe::App for MktNoiseApp {
                         ui.label("Loading...");
                     } else if ui.button("Refresh Data").clicked() {
                         self.start_data_fetch();
+                    }
+
+                    ui.separator();
+
+                    if ui.button("📷").on_hover_text("Take screenshot").clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
+                            egui::UserData::default(),
+                        ));
                     }
                 });
             });

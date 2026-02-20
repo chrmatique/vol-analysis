@@ -215,6 +215,40 @@ impl Default for NnFeatureFlags {
     }
 }
 
+/// File format for screenshots
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ScreenshotFileType {
+    Png,
+    Jpeg,
+    Tiff,
+}
+
+/// Compression level for screenshots
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ScreenshotCompression {
+    None,
+    Low,
+    High,
+}
+
+/// Persisted screenshot settings (save path, format, compression)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScreenshotSettings {
+    pub save_path: String,
+    pub file_type: ScreenshotFileType,
+    pub compression: ScreenshotCompression,
+}
+
+impl Default for ScreenshotSettings {
+    fn default() -> Self {
+        Self {
+            save_path: "./screenshots".to_string(),
+            file_type: ScreenshotFileType::Png,
+            compression: ScreenshotCompression::None,
+        }
+    }
+}
+
 /// Application-wide market data state
 #[derive(Debug, Clone, Default)]
 pub struct MarketData {

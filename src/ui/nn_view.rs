@@ -402,7 +402,14 @@ fn render_compute_stats(
                     .show(ui, |ui| {
                         // Backend
                         ui.label("Backend:");
-                        ui.strong(&stats.backend_name);
+                        if stats.backend_name.contains("fallback") {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(255, 165, 0),
+                                &stats.backend_name,
+                            );
+                        } else {
+                            ui.strong(&stats.backend_name);
+                        }
                         ui.end_row();
 
                         // Model parameters
