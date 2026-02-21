@@ -73,6 +73,7 @@ pub struct ChartHeights {
     pub kurtosis_distribution: f32,
     pub kurtosis_rolling_kurtosis: f32,
     pub kurtosis_rolling_skewness: f32,
+    pub kurtosis_accel_chart: f32,
 }
 
 impl Default for ChartHeights {
@@ -88,6 +89,7 @@ impl Default for ChartHeights {
             kurtosis_distribution: 280.0,
             kurtosis_rolling_kurtosis: 200.0,
             kurtosis_rolling_skewness: 200.0,
+            kurtosis_accel_chart: 220.0,
         }
     }
 }
@@ -123,6 +125,8 @@ pub struct AppState {
     pub screenshot_settings: ScreenshotSettings,
     /// Result slot for the async native folder-picker dialog
     pub folder_picker_result: Option<Arc<Mutex<Option<String>>>>,
+    /// Rolling window size for kurtosis analysis (30 or 60 trading days)
+    pub kurtosis_window: usize,
 }
 
 impl Default for AppState {
@@ -162,6 +166,7 @@ impl Default for AppState {
             screenshot_settings: crate::data::cache::load_json("screenshot_settings.json")
                 .unwrap_or_default(),
             folder_picker_result: None,
+            kurtosis_window: 30,
         }
     }
 }
@@ -214,7 +219,7 @@ impl AppState {
         let mut kurtosis_metrics = Vec::new();
         for sector in &self.market_data.sectors {
             let log_ret = sector.log_returns();
-            if log_ret.len() < config::LONG_VOL_WINDOW {
+            if log_ret.len() < self.kurtosis_window {
                 continue;
             }
             let dates = sector.dates();
@@ -224,7 +229,7 @@ impl AppState {
                 &sector.symbol,
                 ret_dates,
                 &log_ret,
-                config::LONG_VOL_WINDOW,
+                self.kurtosis_window,
             );
             kurtosis_metrics.push(km);
         }
@@ -251,6 +256,28 @@ impl AppState {
 
         // Signal the 3D plot needs a redraw with new data
         self.plot_3d.needs_redraw = true;
+    }
+
+    /// Recompute only kurtosis metrics using the current `kurtosis_window`.
+    /// Much faster than `recompute_analysis()` — avoids recalculating vol, bonds, correlations.
+    pub fn recompute_kurtosis(&mut self) {
+        let mut kurtosis_metrics = Vec::new();
+        for sector in &self.market_data.sectors {
+            let log_ret = sector.log_returns();
+            if log_ret.len() < self.kurtosis_window {
+                continue;
+            }
+            let dates = sector.dates();
+            let ret_dates = if dates.len() > 1 { &dates[1..] } else { &dates };
+            let km = analysis::kurtosis::compute_sector_kurtosis(
+                &sector.symbol,
+                ret_dates,
+                &log_ret,
+                self.kurtosis_window,
+            );
+            kurtosis_metrics.push(km);
+        }
+        self.analysis.kurtosis = kurtosis_metrics;
     }
 }
 

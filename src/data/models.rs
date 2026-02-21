@@ -113,6 +113,21 @@ pub struct VolatilityMetrics {
     pub vol_ratio: Vec<f64>,
 }
 
+/// Kurtosis acceleration/deceleration analysis metrics
+#[derive(Debug, Clone)]
+pub struct KurtosisAccelMetrics {
+    /// First differences of the rolling kurtosis series (trend direction)
+    pub velocity: Vec<f64>,
+    /// Second differences (rate of change of trend)
+    pub acceleration: Vec<f64>,
+    /// One-step-ahead projected acceleration
+    pub projected_accel: f64,
+    /// One-step-ahead projected kurtosis
+    pub projected_kurtosis: f64,
+    /// Last velocity value (positive = rising, negative = declining)
+    pub trend: f64,
+}
+
 /// Kurtosis and distribution metrics for a sector
 #[derive(Debug, Clone)]
 pub struct KurtosisMetrics {
@@ -129,6 +144,8 @@ pub struct KurtosisMetrics {
     pub empirical_density: Vec<[f64; 2]>,
     /// Fitted normal density curve: Vec of [x, density]
     pub normal_density: Vec<[f64; 2]>,
+    /// Acceleration/deceleration analysis (None if insufficient data)
+    pub accel_metrics: Option<KurtosisAccelMetrics>,
 }
 
 /// NN predictions for vol, randomness (entropy), and kurtosis per sector

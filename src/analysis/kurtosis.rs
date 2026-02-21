@@ -1,5 +1,5 @@
 use chrono::NaiveDate;
-use crate::data::models::KurtosisMetrics;
+use crate::data::models::{KurtosisAccelMetrics, KurtosisMetrics};
 
 /// Compute the mean of a slice
 fn mean(data: &[f64]) -> f64 {
@@ -78,6 +78,45 @@ pub fn rolling_skewness(data: &[f64], window: usize) -> Vec<f64> {
     (0..=(data.len() - window))
         .map(|i| skewness(&data[i..i + window]))
         .collect()
+}
+
+/// First differences of a rolling kurtosis series (trend/velocity)
+pub fn kurtosis_velocity(rolling: &[f64]) -> Vec<f64> {
+    if rolling.len() < 2 {
+        return vec![];
+    }
+    rolling.windows(2).map(|w| w[1] - w[0]).collect()
+}
+
+/// Second differences of a rolling kurtosis series (acceleration)
+pub fn kurtosis_acceleration(velocity: &[f64]) -> Vec<f64> {
+    if velocity.len() < 2 {
+        return vec![];
+    }
+    velocity.windows(2).map(|w| w[1] - w[0]).collect()
+}
+
+/// Linear one-step extrapolation from the rolling kurtosis, velocity, and acceleration series
+pub fn project_kurtosis_linear(
+    rolling: &[f64],
+    velocity: &[f64],
+    accel: &[f64],
+) -> KurtosisAccelMetrics {
+    let last_kurt = rolling.last().copied().unwrap_or(0.0);
+    let last_vel = velocity.last().copied().unwrap_or(0.0);
+    let last_accel = accel.last().copied().unwrap_or(0.0);
+    let prev_accel = if accel.len() >= 2 { accel[accel.len() - 2] } else { last_accel };
+
+    let projected_kurtosis = last_kurt + last_vel;
+    let projected_accel = last_accel + (last_accel - prev_accel);
+
+    KurtosisAccelMetrics {
+        velocity: velocity.to_vec(),
+        acceleration: accel.to_vec(),
+        projected_accel,
+        projected_kurtosis,
+        trend: last_vel,
+    }
 }
 
 /// Gaussian kernel density estimation
@@ -171,6 +210,14 @@ pub fn compute_sector_kurtosis(
     let empirical_density = kde(log_returns, 200);
     let normal_density = normal_pdf_curve(log_returns, 200);
 
+    let vel = kurtosis_velocity(&roll_kurt);
+    let accel = kurtosis_acceleration(&vel);
+    let accel_metrics = if !vel.is_empty() && !accel.is_empty() {
+        Some(project_kurtosis_linear(&roll_kurt, &vel, &accel))
+    } else {
+        None
+    };
+
     KurtosisMetrics {
         symbol: symbol.to_string(),
         mean: m,
@@ -183,6 +230,7 @@ pub fn compute_sector_kurtosis(
         rolling_skewness: roll_skew,
         empirical_density,
         normal_density,
+        accel_metrics,
     }
 }
 

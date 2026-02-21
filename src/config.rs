@@ -20,7 +20,7 @@ pub const BENCHMARK_SYMBOL: &str = "SPY";
 /// Reads FMP_API_KEY from the environment (set in a gitignored .env file).
 /// Call `load_env()` once at startup to populate the environment from .env.
 pub fn fmp_api_key() -> String {
-    std::env::var("FMP_API_KEY").unwrap_or_default()
+    dotenvy::var("FMP_API_KEY").unwrap_or_default()
 }
 
 /// Load variables from a `.env` file in the working directory into the process

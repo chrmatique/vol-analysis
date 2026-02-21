@@ -24,6 +24,20 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                 state.selected_sector_idx = i;
             }
         }
+        ui.separator();
+        ui.label("Window:");
+        if ui.selectable_label(state.kurtosis_window == 30, "30-Day").clicked()
+            && state.kurtosis_window != 30
+        {
+            state.kurtosis_window = 30;
+            state.recompute_kurtosis();
+        }
+        if ui.selectable_label(state.kurtosis_window == 60, "60-Day").clicked()
+            && state.kurtosis_window != 60
+        {
+            state.kurtosis_window = 60;
+            state.recompute_kurtosis();
+        }
     });
 
     ui.add_space(8.0);
@@ -128,7 +142,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
 
     // Rolling kurtosis over time
     if !metrics.rolling_kurtosis.is_empty() && !metrics.rolling_dates.is_empty() {
-        ui.heading("Rolling Excess Kurtosis (63-day window)");
+        ui.heading(format!("Rolling Excess Kurtosis ({}-day window)", state.kurtosis_window));
         ui.add_space(4.0);
 
         let base_date = metrics.rolling_dates.first().copied();
@@ -185,9 +199,114 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
 
     ui.add_space(12.0);
 
+    // Kurtosis acceleration / deceleration chart and stats table
+    if let Some(ref accel) = metrics.accel_metrics {
+        if !accel.velocity.is_empty() && !accel.acceleration.is_empty() {
+            ui.heading("Kurtosis Acceleration / Deceleration");
+            ui.add_space(4.0);
+
+            let vel_points: PlotPoints = accel
+                .velocity
+                .iter()
+                .enumerate()
+                .map(|(i, v)| [i as f64, *v])
+                .collect();
+
+            let accel_points: PlotPoints = accel
+                .acceleration
+                .iter()
+                .enumerate()
+                .map(|(i, a)| [i as f64, *a])
+                .collect();
+
+            let x_max = accel.velocity.len() as f64;
+            let zero_line: PlotPoints = vec![[0.0, 0.0], [x_max, 0.0]].into_iter().collect();
+
+            height_control(ui, &mut state.chart_heights.kurtosis_accel_chart, "Acceleration Chart Height");
+            Plot::new("kurtosis_accel_plot")
+                .height(state.chart_heights.kurtosis_accel_chart)
+                .allow_drag(true)
+                .allow_scroll(false)
+                .allow_zoom(false)
+                .x_axis_label("Observation")
+                .y_axis_label("Rate of Change")
+                .legend(egui_plot::Legend::default())
+                .show(ui, |plot_ui| {
+                    plot_ui.line(
+                        Line::new(vel_points)
+                            .name("Velocity (trend)")
+                            .color(egui::Color32::from_rgb(80, 200, 120))
+                            .width(1.8),
+                    );
+                    plot_ui.line(
+                        Line::new(accel_points)
+                            .name("Acceleration")
+                            .color(egui::Color32::from_rgb(255, 140, 50))
+                            .width(1.8),
+                    );
+                    plot_ui.line(
+                        Line::new(zero_line)
+                            .name("Zero")
+                            .color(egui::Color32::from_rgb(150, 150, 150))
+                            .style(egui_plot::LineStyle::dashed_loose()),
+                    );
+                });
+
+            ui.add_space(6.0);
+
+            // Embedded stats table
+            ui.group(|ui| {
+                ui.strong("Projected Metrics (one-step-ahead linear extrapolation)");
+                ui.add_space(4.0);
+
+                egui::Grid::new("accel_stats_table")
+                    .min_col_width(180.0)
+                    .striped(true)
+                    .show(ui, |ui| {
+                        ui.strong("Metric");
+                        ui.strong("Value");
+                        ui.end_row();
+
+                        let trend_color = if accel.trend >= 0.0 {
+                            egui::Color32::from_rgb(50, 200, 80)
+                        } else {
+                            egui::Color32::from_rgb(220, 60, 60)
+                        };
+                        let accel_color = if accel.projected_accel >= 0.0 {
+                            egui::Color32::from_rgb(50, 200, 80)
+                        } else {
+                            egui::Color32::from_rgb(220, 60, 60)
+                        };
+                        let kurt_color = if accel.projected_kurtosis >= 0.0 {
+                            egui::Color32::from_rgb(50, 200, 80)
+                        } else {
+                            egui::Color32::from_rgb(220, 60, 60)
+                        };
+
+                        ui.label("Kurtosis Trend (velocity)");
+                        ui.colored_label(trend_color, format!("{:.6}", accel.trend));
+                        ui.end_row();
+
+                        ui.label("Projected Accel/Decel");
+                        ui.colored_label(accel_color, format!("{:.6}", accel.projected_accel));
+                        ui.end_row();
+
+                        ui.label("Projected Kurtosis");
+                        ui.colored_label(kurt_color, format!("{:.6}", accel.projected_kurtosis));
+                        ui.end_row();
+                    });
+            });
+
+            ui.add_space(4.0);
+            ui.small("Velocity = first difference of rolling kurtosis (positive = rising). Acceleration = second difference (positive = accelerating). Projections use linear extrapolation one step ahead.");
+        }
+    }
+
+    ui.add_space(12.0);
+
     // Rolling skewness over time
     if !metrics.rolling_skewness.is_empty() && !metrics.rolling_dates.is_empty() {
-        ui.heading("Rolling Skewness (63-day window)");
+        ui.heading(format!("Rolling Skewness ({}-day window)", state.kurtosis_window));
         ui.add_space(4.0);
 
         let base_date = metrics.rolling_dates.first().copied();

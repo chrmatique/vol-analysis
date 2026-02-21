@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 
 use crate::data::cache;
-use crate::data::models::{SectorPerformance, TreasuryRate};
+use crate::data::models::TreasuryRate;
+use crate::data::models::SectorPerformance;
 
 /// Fetch treasury rates from FMP API
 pub async fn fetch_treasury_rates(api_key: &str) -> Result<Vec<TreasuryRate>> {
@@ -43,7 +44,9 @@ mod tests {
 
     #[tokio::test]
     async fn fetch_treasury_rates_dump_json() {
-        let api_key = "";
+        let api_key = std::env::var("FMP_API_KEY")
+            .or_else(|_| dotenvy::var("FMP_API_KEY"))
+            .expect("FMP_API_KEY not set in environment or .env");
         let res = fetch_treasury_rates(&api_key).await;
         match res {
             Ok(rates) => {
