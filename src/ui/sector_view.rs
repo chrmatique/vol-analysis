@@ -3,7 +3,7 @@ use egui_plot::{Line, Plot, PlotPoints};
 
 use crate::app::AppState;
 use crate::config;
-use crate::ui::chart_utils::height_control;
+use crate::ui::chart_utils::{self, height_control, HoverSeries};
 
 pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Sector Volatility Analysis");
@@ -66,12 +66,14 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     ui.collapsing("Price Chart", |ui| {
         height_control(ui, &mut state.chart_heights.sector_price, "Price Chart Height");
 
-        let prices: PlotPoints = sector
+        let price_data: Vec<[f64; 2]> = sector
             .bars
             .iter()
             .enumerate()
             .map(|(i, b)| [i as f64, b.close])
             .collect();
+        let prices: PlotPoints = price_data.iter().copied().collect();
+        let hover = [HoverSeries { name: &sector.symbol, data: &price_data, decimals: 2, suffix: "" }];
 
         Plot::new("price_plot")
             .height(state.chart_heights.sector_price)
@@ -80,6 +82,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .allow_zoom(false)
             .x_axis_label("Trading Day")
             .y_axis_label("Price ($)")
+            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&hover))
+            .label_formatter(chart_utils::no_hover_label)
             .show(ui, |plot_ui| {
                 plot_ui.line(
                     Line::new(prices)
@@ -99,26 +103,37 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             config::LONG_VOL_WINDOW
         ));
 
-        let short_points: PlotPoints = vm
+        let short_data: Vec<[f64; 2]> = vm
             .short_window_vol
             .iter()
             .enumerate()
             .map(|(i, v)| [i as f64, *v * 100.0])
             .collect();
+        let short_points: PlotPoints = short_data.iter().copied().collect();
 
-        let long_points: PlotPoints = vm
+        let long_data: Vec<[f64; 2]> = vm
             .long_window_vol
             .iter()
             .enumerate()
             .map(|(i, v)| [i as f64, *v * 100.0])
             .collect();
+        let long_points: PlotPoints = long_data.iter().copied().collect();
 
-        let park_points: PlotPoints = vm
+        let park_data: Vec<[f64; 2]> = vm
             .parkinson_vol
             .iter()
             .enumerate()
             .map(|(i, v)| [i as f64, *v * 100.0])
             .collect();
+        let park_points: PlotPoints = park_data.iter().copied().collect();
+
+        let short_name = format!("{}D Vol", config::SHORT_VOL_WINDOW);
+        let long_name = format!("{}D Vol", config::LONG_VOL_WINDOW);
+        let vol_hover = [
+            HoverSeries { name: &short_name, data: &short_data, decimals: 1, suffix: "%" },
+            HoverSeries { name: &long_name, data: &long_data, decimals: 1, suffix: "%" },
+            HoverSeries { name: "Parkinson Vol", data: &park_data, decimals: 1, suffix: "%" },
+        ];
 
         height_control(ui, &mut state.chart_heights.sector_vol, "Volatility Chart Height");
         Plot::new("vol_plot")
@@ -129,6 +144,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .x_axis_label("Trading Day (aligned)")
             .y_axis_label("Annualized Vol (%)")
             .legend(egui_plot::Legend::default())
+            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&vol_hover))
+            .label_formatter(chart_utils::no_hover_label)
             .show(ui, |plot_ui| {
                 plot_ui.line(
                     Line::new(short_points)
@@ -151,16 +168,19 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         ui.add_space(8.0);
         ui.label("Volatility Ratio (Short / Long) - above 1.0 indicates rising vol regime");
 
-        let ratio_points: PlotPoints = vm
+        let ratio_data: Vec<[f64; 2]> = vm
             .vol_ratio
             .iter()
             .enumerate()
             .map(|(i, v)| [i as f64, *v])
             .collect();
+        let ratio_points: PlotPoints = ratio_data.iter().copied().collect();
 
         let baseline: PlotPoints = PlotPoints::from_iter(
             (0..vm.vol_ratio.len()).map(|i| [i as f64, 1.0]),
         );
+
+        let ratio_hover = [HoverSeries { name: "Vol Ratio", data: &ratio_data, decimals: 2, suffix: "" }];
 
         height_control(ui, &mut state.chart_heights.sector_ratio, "Vol Ratio Chart Height");
         Plot::new("ratio_plot")
@@ -170,6 +190,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .allow_zoom(false)
             .x_axis_label("Trading Day (aligned)")
             .y_axis_label("Vol Ratio")
+            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&ratio_hover))
+            .label_formatter(chart_utils::no_hover_label)
             .show(ui, |plot_ui| {
                 plot_ui.line(
                     Line::new(ratio_points)
