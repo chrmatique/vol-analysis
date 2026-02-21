@@ -3,7 +3,7 @@ use egui_plot::{Bar, BarChart, Line, Plot, PlotPoints};
 
 use crate::analysis::bond_spreads;
 use crate::app::AppState;
-use crate::ui::chart_utils::height_control;
+use crate::ui::chart_utils::{self, height_control, HoverSeries};
 
 pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Bond Spreads & Yield Curve");
@@ -21,14 +21,17 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
 
             let curve = bond_spreads::yield_curve_for_date(latest_rate);
             if !curve.is_empty() {
-                let bars: Vec<Bar> = curve
+                let bar_data: Vec<[f64; 2]> = curve
                     .iter()
                     .enumerate()
-                    .map(|(i, (_label, rate))| {
-                        Bar::new(i as f64, *rate)
-                            .width(0.6)
-                    })
+                    .map(|(i, (_label, rate))| [i as f64, *rate])
                     .collect();
+                let x_labels: Vec<String> = curve.iter().map(|(label, _)| label.to_string()).collect();
+                let bars: Vec<Bar> = bar_data
+                    .iter()
+                    .map(|p| Bar::new(p[0], p[1]).width(0.6))
+                    .collect();
+                let yield_hover = [HoverSeries { name: "Yield", data: &bar_data, decimals: 2, suffix: "%" }];
 
                 height_control(ui, &mut state.chart_heights.bond_yield_curve, "Yield Curve Chart Height");
                 Plot::new("yield_curve")
@@ -37,6 +40,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                     .allow_scroll(false)
                     .allow_zoom(false)
                     .y_axis_label("Yield (%)")
+                    .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter_labeled_x(&yield_hover, &x_labels))
+                    .label_formatter(chart_utils::no_hover_label)
                     .show(ui, |plot_ui| {
                         plot_ui.bar_chart(
                             BarChart::new(bars)
@@ -62,7 +67,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         ui.heading("10Y-2Y Term Spread Over Time");
         ui.add_space(4.0);
 
-        let spread_points: PlotPoints = state
+        let spread_data: Vec<[f64; 2]> = state
             .analysis
             .bond_spreads
             .iter()
@@ -70,10 +75,13 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .enumerate()
             .map(|(i, s)| [i as f64, s.spread_10y_2y])
             .collect();
+        let spread_points: PlotPoints = spread_data.iter().copied().collect();
 
         let zero_line: PlotPoints = PlotPoints::from_iter(
             (0..state.analysis.bond_spreads.len()).map(|i| [i as f64, 0.0]),
         );
+
+        let spread_hover = [HoverSeries { name: "10Y-2Y Spread", data: &spread_data, decimals: 2, suffix: " pp" }];
 
         height_control(ui, &mut state.chart_heights.bond_term_spread, "Term Spread Chart Height");
         Plot::new("term_spread_plot")
@@ -84,6 +92,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .x_axis_label("Trading Day (recent -> past)")
             .y_axis_label("Spread (percentage points)")
             .legend(egui_plot::Legend::default())
+            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&spread_hover))
+            .label_formatter(chart_utils::no_hover_label)
             .show(ui, |plot_ui| {
                 plot_ui.line(
                     Line::new(spread_points)
@@ -103,7 +113,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         ui.heading("Curve Slope (30Y - 3M)");
         ui.add_space(4.0);
 
-        let slope_points: PlotPoints = state
+        let slope_data: Vec<[f64; 2]> = state
             .analysis
             .bond_spreads
             .iter()
@@ -111,6 +121,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .enumerate()
             .map(|(i, s)| [i as f64, s.curve_slope])
             .collect();
+        let slope_points: PlotPoints = slope_data.iter().copied().collect();
+        let slope_hover = [HoverSeries { name: "30Y-3M Slope", data: &slope_data, decimals: 2, suffix: " pp" }];
 
         height_control(ui, &mut state.chart_heights.bond_curve_slope, "Curve Slope Chart Height");
         Plot::new("curve_slope_plot")
@@ -120,6 +132,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .allow_zoom(false)
             .x_axis_label("Trading Day (recent -> past)")
             .y_axis_label("Slope (percentage points)")
+            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&slope_hover))
+            .label_formatter(chart_utils::no_hover_label)
             .show(ui, |plot_ui| {
                 plot_ui.line(
                     Line::new(slope_points)

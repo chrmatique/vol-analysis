@@ -4,7 +4,7 @@ use egui_plot::{Line, Plot, PlotPoints};
 use crate::app::AppState;
 use crate::data::models::TrainingStatus;
 use crate::nn::training::TrainingProgress;
-use crate::ui::chart_utils::height_control;
+use crate::ui::chart_utils::{self, height_control, HoverSeries};
 
 pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Neural Network - Volatility Regime Prediction");
@@ -244,12 +244,14 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     // Loss curve
     if !state.training_losses.is_empty() {
         ui.heading("Training Loss");
-        let loss_points: PlotPoints = state
+        let loss_data: Vec<[f64; 2]> = state
             .training_losses
             .iter()
             .enumerate()
             .map(|(i, l)| [i as f64, *l])
             .collect();
+        let loss_points: PlotPoints = loss_data.iter().copied().collect();
+        let loss_hover = [HoverSeries { name: "MSE Loss", data: &loss_data, decimals: 6, suffix: "" }];
 
         height_control(ui, &mut state.chart_heights.nn_loss, "Loss Chart Height");
         Plot::new("loss_plot")
@@ -259,6 +261,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .allow_zoom(false)
             .x_axis_label("Epoch")
             .y_axis_label("MSE Loss")
+            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&loss_hover))
+            .label_formatter(chart_utils::no_hover_label)
             .show(ui, |plot_ui| {
                 plot_ui.line(
                     Line::new(loss_points)

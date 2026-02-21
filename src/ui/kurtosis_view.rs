@@ -2,7 +2,7 @@ use eframe::egui;
 use egui_plot::{Line, Plot, PlotPoints};
 
 use crate::app::AppState;
-use crate::ui::chart_utils::height_control;
+use crate::ui::chart_utils::{self, height_control, HoverSeries};
 
 pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Kurtosis & Return Distribution Analysis");
@@ -97,17 +97,24 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         ui.heading("Return Distribution (KDE vs Normal Fit)");
         ui.add_space(4.0);
 
-        let empirical_points: PlotPoints = metrics
+        let empirical_data: Vec<[f64; 2]> = metrics
             .empirical_density
             .iter()
             .map(|p| [p[0] * 100.0, p[1] / 100.0]) // convert x to % scale, adjust density
             .collect();
+        let empirical_points: PlotPoints = empirical_data.iter().copied().collect();
 
-        let normal_points: PlotPoints = metrics
+        let normal_data: Vec<[f64; 2]> = metrics
             .normal_density
             .iter()
             .map(|p| [p[0] * 100.0, p[1] / 100.0])
             .collect();
+        let normal_points: PlotPoints = normal_data.iter().copied().collect();
+
+        let dist_hover = [
+            HoverSeries { name: "Empirical KDE", data: &empirical_data, decimals: 4, suffix: "" },
+            HoverSeries { name: "Normal Fit", data: &normal_data, decimals: 4, suffix: "" },
+        ];
 
         height_control(ui, &mut state.chart_heights.kurtosis_distribution, "Distribution Plot Height");
         Plot::new("distribution_plot")
@@ -118,6 +125,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .x_axis_label("Daily Log Return (%)")
             .y_axis_label("Density")
             .legend(egui_plot::Legend::default())
+            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&dist_hover))
+            .label_formatter(chart_utils::no_hover_label)
             .show(ui, |plot_ui| {
                 plot_ui.line(
                     Line::new(empirical_points)
@@ -146,7 +155,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         ui.add_space(4.0);
 
         let base_date = metrics.rolling_dates.first().copied();
-        let kurt_points: PlotPoints = metrics
+        let kurt_data: Vec<[f64; 2]> = metrics
             .rolling_kurtosis
             .iter()
             .enumerate()
@@ -163,6 +172,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                 [day, *k]
             })
             .collect();
+        let kurt_points: PlotPoints = kurt_data.iter().copied().collect();
 
         // Reference line at 0 (normal distribution)
         let x_max = metrics
@@ -171,6 +181,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .and_then(|d| base_date.map(|bd| (*d - bd).num_days() as f64))
             .unwrap_or(metrics.rolling_kurtosis.len() as f64);
         let zero_line: PlotPoints = vec![[0.0, 0.0], [x_max, 0.0]].into_iter().collect();
+
+        let kurt_hover = [HoverSeries { name: "Rolling Kurtosis", data: &kurt_data, decimals: 3, suffix: "" }];
 
         height_control(ui, &mut state.chart_heights.kurtosis_rolling_kurtosis, "Rolling Kurtosis Chart Height");
         Plot::new("rolling_kurtosis_plot")
@@ -181,6 +193,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .x_axis_label("Trading Days")
             .y_axis_label("Excess Kurtosis")
             .legend(egui_plot::Legend::default())
+            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&kurt_hover))
+            .label_formatter(chart_utils::no_hover_label)
             .show(ui, |plot_ui| {
                 plot_ui.line(
                     Line::new(kurt_points)
@@ -205,22 +219,29 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             ui.heading("Kurtosis Acceleration / Deceleration");
             ui.add_space(4.0);
 
-            let vel_points: PlotPoints = accel
+            let vel_data: Vec<[f64; 2]> = accel
                 .velocity
                 .iter()
                 .enumerate()
                 .map(|(i, v)| [i as f64, *v])
                 .collect();
+            let vel_points: PlotPoints = vel_data.iter().copied().collect();
 
-            let accel_points: PlotPoints = accel
+            let acc_data: Vec<[f64; 2]> = accel
                 .acceleration
                 .iter()
                 .enumerate()
                 .map(|(i, a)| [i as f64, *a])
                 .collect();
+            let accel_points: PlotPoints = acc_data.iter().copied().collect();
 
             let x_max = accel.velocity.len() as f64;
             let zero_line: PlotPoints = vec![[0.0, 0.0], [x_max, 0.0]].into_iter().collect();
+
+            let accel_hover = [
+                HoverSeries { name: "Velocity", data: &vel_data, decimals: 4, suffix: "" },
+                HoverSeries { name: "Acceleration", data: &acc_data, decimals: 4, suffix: "" },
+            ];
 
             height_control(ui, &mut state.chart_heights.kurtosis_accel_chart, "Acceleration Chart Height");
             Plot::new("kurtosis_accel_plot")
@@ -231,6 +252,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                 .x_axis_label("Observation")
                 .y_axis_label("Rate of Change")
                 .legend(egui_plot::Legend::default())
+                .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&accel_hover))
+                .label_formatter(chart_utils::no_hover_label)
                 .show(ui, |plot_ui| {
                     plot_ui.line(
                         Line::new(vel_points)
@@ -310,7 +333,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         ui.add_space(4.0);
 
         let base_date = metrics.rolling_dates.first().copied();
-        let skew_points: PlotPoints = metrics
+        let skew_data: Vec<[f64; 2]> = metrics
             .rolling_skewness
             .iter()
             .enumerate()
@@ -327,6 +350,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                 [day, *s]
             })
             .collect();
+        let skew_points: PlotPoints = skew_data.iter().copied().collect();
 
         let x_max = metrics
             .rolling_dates
@@ -334,6 +358,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .and_then(|d| base_date.map(|bd| (*d - bd).num_days() as f64))
             .unwrap_or(metrics.rolling_skewness.len() as f64);
         let zero_line: PlotPoints = vec![[0.0, 0.0], [x_max, 0.0]].into_iter().collect();
+
+        let skew_hover = [HoverSeries { name: "Rolling Skewness", data: &skew_data, decimals: 3, suffix: "" }];
 
         height_control(ui, &mut state.chart_heights.kurtosis_rolling_skewness, "Rolling Skewness Chart Height");
         Plot::new("rolling_skewness_plot")
@@ -344,6 +370,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             .x_axis_label("Trading Days")
             .y_axis_label("Skewness")
             .legend(egui_plot::Legend::default())
+            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&skew_hover))
+            .label_formatter(chart_utils::no_hover_label)
             .show(ui, |plot_ui| {
                 plot_ui.line(
                     Line::new(skew_points)

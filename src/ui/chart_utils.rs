@@ -1,6 +1,105 @@
 /// Shared chart utilities for all UI views that render plots.
 
 use eframe::egui;
+use egui_plot::{CoordinatesFormatter, Corner, PlotBounds, PlotPoint};
+
+// ── Hover label utilities ───────────────────────────────────────────────────
+
+/// A named data series for hover display. Borrows the underlying data so no
+/// heap allocation is needed beyond what the view already holds.
+pub struct HoverSeries<'a> {
+    pub name: &'a str,
+    pub data: &'a [[f64; 2]],
+    pub decimals: usize,
+    pub suffix: &'a str,
+}
+
+/// Build a `CoordinatesFormatter` that shows the nearest Y value for each
+/// series at the cursor's X position.  Use with
+/// `Plot::coordinates_formatter(Corner::RightBottom, hover_formatter(&series))`.
+pub fn hover_formatter<'a>(series: &'a [HoverSeries<'a>]) -> CoordinatesFormatter<'a> {
+    CoordinatesFormatter::new(move |cursor: &PlotPoint, _bounds: &PlotBounds| {
+        let x = cursor.x;
+        let mut text = format!("x: {:.0}", x);
+        for s in series {
+            if let Some(idx) = nearest_x_index(s.data, x) {
+                use std::fmt::Write;
+                let _ = write!(
+                    text,
+                    "\n{}: {:.prec$}{}",
+                    s.name,
+                    s.data[idx][1],
+                    s.suffix,
+                    prec = s.decimals
+                );
+            }
+        }
+        text
+    })
+}
+
+/// Variant of [`hover_formatter`] for charts with discrete, labelled X
+/// positions (e.g. yield-curve maturity names).  `x_labels[i]` is shown
+/// instead of the numeric X value when the cursor is nearest to index `i`.
+pub fn hover_formatter_labeled_x<'a>(
+    series: &'a [HoverSeries<'a>],
+    x_labels: &'a [String],
+) -> CoordinatesFormatter<'a> {
+    CoordinatesFormatter::new(move |cursor: &PlotPoint, _bounds: &PlotBounds| {
+        let x = cursor.x;
+        let x_idx = x.round().max(0.0) as usize;
+        let x_display = x_labels
+            .get(x_idx)
+            .map(|s| s.as_str())
+            .unwrap_or("?");
+        let mut text = x_display.to_string();
+        for s in series {
+            if let Some(idx) = nearest_x_index(s.data, x) {
+                use std::fmt::Write;
+                let _ = write!(
+                    text,
+                    "\n{}: {:.prec$}{}",
+                    s.name,
+                    s.data[idx][1],
+                    s.suffix,
+                    prec = s.decimals
+                );
+            }
+        }
+        text
+    })
+}
+
+/// Pass to `Plot::label_formatter` to suppress the default per-line hover
+/// tooltip (we show data in the corner instead).
+pub fn no_hover_label(_name: &str, _point: &PlotPoint) -> String {
+    String::new()
+}
+
+/// The fixed corner where hover labels are displayed.
+pub const HOVER_CORNER: Corner = Corner::RightBottom;
+
+/// Binary-search for the index of the data point whose X is closest to
+/// `target_x`.  Assumes `data` is sorted ascending by `[0]` (X).
+fn nearest_x_index(data: &[[f64; 2]], target_x: f64) -> Option<usize> {
+    if data.is_empty() {
+        return None;
+    }
+    let idx = data.partition_point(|p| p[0] < target_x);
+    if idx == 0 {
+        return Some(0);
+    }
+    if idx >= data.len() {
+        return Some(data.len() - 1);
+    }
+    let left_dist = (data[idx - 1][0] - target_x).abs();
+    let right_dist = (data[idx][0] - target_x).abs();
+    if left_dist <= right_dist {
+        Some(idx - 1)
+    } else {
+        Some(idx)
+    }
+}
 
 /// Inline height-adjustment drag control placed immediately above a chart.
 /// Allows all drawn charts to be vertically resized via a shared implementation.
