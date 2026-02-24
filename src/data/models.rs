@@ -120,7 +120,6 @@ pub struct SectorPerformance {
 #[derive(Debug, Clone)]
 pub struct VolatilityMetrics {
     pub symbol: String,
-    pub dates: Vec<NaiveDate>,
     pub short_window_vol: Vec<f64>,
     pub long_window_vol: Vec<f64>,
     pub parkinson_vol: Vec<f64>,
@@ -197,9 +196,6 @@ pub enum TrainingStatus {
 #[derive(Debug, Clone)]
 pub struct GpuAdapterInfo {
     pub name: String,
-    pub backend: String,  // "Vulkan" | "Dx12" | "Metal"
-    pub is_nvidia: bool,
-    pub is_amd: bool,
 }
 
 /// Compute/resource statistics collected during training

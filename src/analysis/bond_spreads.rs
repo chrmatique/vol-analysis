@@ -57,43 +57,6 @@ pub fn yield_curve_for_date(rate: &TreasuryRate) -> Vec<(&'static str, f64)> {
     curve
 }
 
-/// Compute correlation between spread changes and sector volatility changes
-pub fn spread_vol_correlation(
-    spreads: &[f64],
-    volatilities: &[f64],
-) -> f64 {
-    let n = spreads.len().min(volatilities.len());
-    if n < 3 {
-        return 0.0;
-    }
-
-    // Compute changes (first differences)
-    let spread_changes: Vec<f64> = spreads.windows(2).map(|w| w[1] - w[0]).collect();
-    let vol_changes: Vec<f64> = volatilities.windows(2).map(|w| w[1] - w[0]).collect();
-
-    let m = spread_changes.len().min(vol_changes.len());
-    if m < 2 {
-        return 0.0;
-    }
-
-    let mean_s = spread_changes[..m].iter().sum::<f64>() / m as f64;
-    let mean_v = vol_changes[..m].iter().sum::<f64>() / m as f64;
-
-    let mut cov = 0.0;
-    let mut var_s = 0.0;
-    let mut var_v = 0.0;
-
-    for i in 0..m {
-        let ds = spread_changes[i] - mean_s;
-        let dv = vol_changes[i] - mean_v;
-        cov += ds * dv;
-        var_s += ds * ds;
-        var_v += dv * dv;
-    }
-
-    let denom = (var_s * var_v).sqrt();
-    if denom < 1e-15 { 0.0 } else { cov / denom }
-}
 
 #[cfg(test)]
 mod tests {
@@ -151,11 +114,4 @@ mod tests {
         assert_eq!(curve[0].0, "3M");
     }
 
-    #[test]
-    fn test_spread_vol_correlation() {
-        let spreads = vec![0.5, 0.6, 0.4, 0.7, 0.3, 0.8];
-        let vols = vec![0.15, 0.16, 0.14, 0.17, 0.13, 0.18];
-        let corr = spread_vol_correlation(&spreads, &vols);
-        assert!(corr > 0.9, "Expected high positive correlation, got {}", corr);
-    }
 }

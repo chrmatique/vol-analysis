@@ -1,5 +1,3 @@
-use chrono::NaiveDate;
-
 use crate::data::models::VolatilityMetrics;
 
 const TRADING_DAYS_PER_YEAR: f64 = 252.0;
@@ -62,7 +60,6 @@ pub fn volatility_ratio(short_vol: &[f64], long_vol: &[f64]) -> Vec<f64> {
 /// Compute full VolatilityMetrics for a sector
 pub fn compute_sector_volatility(
     symbol: &str,
-    bars_dates: &[NaiveDate],
     log_returns: &[f64],
     highs: &[f64],
     lows: &[f64],
@@ -73,14 +70,6 @@ pub fn compute_sector_volatility(
     let long_vol = rolling_volatility(log_returns, long_window);
     let park_vol = parkinson_volatility(highs, lows, short_window);
     let vol_rat = volatility_ratio(&short_vol, &long_vol);
-
-    // Align dates: rolling vol of window N starts at index N (from returns which start at index 1)
-    // So for the long vol, dates start at long_window index from the original bars
-    let vol_dates = if bars_dates.len() > long_window {
-        bars_dates[long_window..].to_vec()
-    } else {
-        vec![]
-    };
 
     // Trim all series to match the shortest (long_vol)
     let n = long_vol.len();
@@ -94,11 +83,6 @@ pub fn compute_sector_volatility(
 
     VolatilityMetrics {
         symbol: symbol.to_string(),
-        dates: if vol_dates.len() >= n {
-            vol_dates[vol_dates.len() - n..].to_vec()
-        } else {
-            vol_dates
-        },
         short_window_vol: trim(&short_vol),
         long_window_vol: long_vol,
         parkinson_vol: trim(&park_vol),

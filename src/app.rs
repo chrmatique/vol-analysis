@@ -181,14 +181,12 @@ impl AppState {
             if sector.bars.len() < config::LONG_VOL_WINDOW + 2 {
                 continue;
             }
-            let dates = sector.dates();
             let log_ret = sector.log_returns();
             let highs = sector.highs();
             let lows = sector.lows();
 
             let vm = analysis::volatility::compute_sector_volatility(
                 &sector.symbol,
-                &dates,
                 &log_ret,
                 &highs,
                 &lows,

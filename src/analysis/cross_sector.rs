@@ -67,26 +67,6 @@ pub fn compute_correlation_matrix(
     }
 }
 
-/// Compute rolling pairwise correlation between two return series
-pub fn rolling_correlation(
-    returns_a: &[f64],
-    returns_b: &[f64],
-    window: usize,
-) -> Vec<f64> {
-    let n = returns_a.len().min(returns_b.len());
-    if n < window || window < 2 {
-        return vec![];
-    }
-
-    (0..=(n - window))
-        .map(|i| {
-            pearson_correlation(
-                &returns_a[i..i + window],
-                &returns_b[i..i + window],
-            )
-        })
-        .collect()
-}
 
 /// Compute average cross-sector correlation from a correlation matrix
 pub fn average_cross_correlation(matrix: &CorrelationMatrix) -> f64 {
@@ -148,14 +128,6 @@ mod tests {
         ];
         let cm = compute_correlation_matrix(&symbols, &returns);
         assert!((cm.matrix[0][1] - cm.matrix[1][0]).abs() < 1e-10);
-    }
-
-    #[test]
-    fn test_rolling_correlation_length() {
-        let a = vec![0.01, -0.02, 0.03, 0.01, -0.01, 0.02, -0.005];
-        let b = vec![0.02, -0.01, 0.02, 0.015, -0.005, 0.01, -0.003];
-        let rc = rolling_correlation(&a, &b, 3);
-        assert_eq!(rc.len(), 5);
     }
 
     #[test]

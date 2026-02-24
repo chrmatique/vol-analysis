@@ -23,16 +23,8 @@ pub fn detect_wgpu_adapters() -> Vec<GpuAdapterInfo> {
     let mut adapters = Vec::new();
     for adapter in instance.enumerate_adapters(wgpu::Backends::all()) {
         let info = adapter.get_info();
-        let name = info.name.clone();
-        let backend = format!("{:?}", info.backend);
-        let is_nvidia = name.to_lowercase().contains("nvidia");
-        let is_amd = name.to_lowercase().contains("amd") || name.to_lowercase().contains("radeon");
-
         adapters.push(GpuAdapterInfo {
-            name: name.to_string(),
-            backend,
-            is_nvidia,
-            is_amd,
+            name: info.name.clone(),
         });
     }
     adapters
@@ -276,63 +268,9 @@ fn query_amd_smi() -> Option<GpuInfo> {
     None::<GpuInfo>
 }
 
-/// Trait for GPU detection, enabling mock injection in tests.
-#[allow(dead_code)]
-pub trait GpuDetector {
-    fn adapters(&self) -> Vec<GpuAdapterInfo>;
-    fn nvidia_stats(&self) -> Option<GpuInfo>;
-    fn amd_stats(&self) -> Option<GpuInfo>;
-}
-
-/// Real detector using wgpu and vendor-specific CLI tools.
-#[allow(dead_code)]
-pub struct RealGpuDetector;
-
-impl GpuDetector for RealGpuDetector {
-    fn adapters(&self) -> Vec<GpuAdapterInfo> {
-        detect_wgpu_adapters()
-    }
-
-    fn nvidia_stats(&self) -> Option<GpuInfo> {
-        detect_nvidia_gpu()
-    }
-
-    fn amd_stats(&self) -> Option<GpuInfo> {
-        detect_amd_gpu()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Mock detector that returns a fake AMD GPU for testing without hardware.
-    struct MockGpuDetector;
-
-    impl GpuDetector for MockGpuDetector {
-        fn adapters(&self) -> Vec<GpuAdapterInfo> {
-            vec![GpuAdapterInfo {
-                name: "AMD Radeon RX 6800 (Mock)".to_string(),
-                backend: "Vulkan".to_string(),
-                is_nvidia: false,
-                is_amd: true,
-            }]
-        }
-
-        fn nvidia_stats(&self) -> Option<GpuInfo> {
-            None
-        }
-
-        fn amd_stats(&self) -> Option<GpuInfo> {
-            Some(GpuInfo {
-                name: "AMD Radeon RX 6800 (Mock)".to_string(),
-                vram_total_mb: 16384,
-                vram_used_mb: 2048,
-                utilization_percent: 45.0,
-                temperature_c: 62.0,
-            })
-        }
-    }
 
     /// validate_gpu() must return Ok or Err without panicking -- even on CI machines
     /// without a real GPU (WGPU will fall back to its software/null adapter).
@@ -348,24 +286,5 @@ mod tests {
                 assert!(!reason.is_empty(), "Error message should be non-empty on failure");
             }
         }
-    }
-
-    #[test]
-    fn mock_amd_adapter_detected() {
-        let mock = MockGpuDetector;
-        let adapters = mock.adapters();
-        assert!(!adapters.is_empty());
-        assert!(adapters[0].is_amd);
-        assert!(!adapters[0].is_nvidia);
-        assert!(adapters[0].name.contains("AMD"));
-    }
-
-    #[test]
-    fn mock_amd_training_device_available() {
-        let mock = MockGpuDetector;
-        let adapters = mock.adapters();
-        assert!(adapters.iter().any(|a| a.is_amd));
-        let amd = adapters.iter().find(|a| a.is_amd).unwrap();
-        assert_eq!(amd.backend, "Vulkan");
     }
 }
