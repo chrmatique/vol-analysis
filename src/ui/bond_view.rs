@@ -34,21 +34,24 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                 let yield_hover = [HoverSeries { name: "Yield", data: &bar_data, decimals: 2, suffix: "%" }];
 
                 height_control(ui, &mut state.chart_heights.bond_yield_curve, "Yield Curve Chart Height");
-                Plot::new("yield_curve")
-                    .height(state.chart_heights.bond_yield_curve)
-                    .allow_drag(true)
-                    .allow_scroll(false)
-                    .allow_zoom(false)
-                    .y_axis_label("Yield (%)")
-                    .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter_labeled_x(&yield_hover, &x_labels))
-                    .label_formatter(chart_utils::no_hover_label)
-                    .show(ui, |plot_ui| {
+                chart_utils::plot_with_y_drag(
+                    ui,
+                    "yield_curve",
+                    chart_utils::default_plot_interaction(
+                        Plot::new("yield_curve")
+                            .height(state.chart_heights.bond_yield_curve),
+                    )
+                        .y_axis_label("Yield (%)")
+                        .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter_labeled_x(&yield_hover, &x_labels))
+                        .label_formatter(chart_utils::no_hover_label),
+                    |plot_ui| {
                         plot_ui.bar_chart(
                             BarChart::new(bars)
                                 .name("Yield Curve")
                                 .color(egui::Color32::from_rgb(70, 130, 220)),
                         );
-                    });
+                    },
+                );
 
                 // Show maturity labels
                 ui.horizontal_wrapped(|ui| {
@@ -84,17 +87,19 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         let spread_hover = [HoverSeries { name: "10Y-2Y Spread", data: &spread_data, decimals: 2, suffix: " pp" }];
 
         height_control(ui, &mut state.chart_heights.bond_term_spread, "Term Spread Chart Height");
-        Plot::new("term_spread_plot")
-            .height(state.chart_heights.bond_term_spread)
-            .allow_drag(true)
-            .allow_scroll(false)
-            .allow_zoom(false)
-            .x_axis_label("Trading Day (recent -> past)")
-            .y_axis_label("Spread (percentage points)")
-            .legend(egui_plot::Legend::default())
-            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&spread_hover))
-            .label_formatter(chart_utils::no_hover_label)
-            .show(ui, |plot_ui| {
+        chart_utils::plot_with_y_drag(
+            ui,
+            "term_spread_plot",
+            chart_utils::default_plot_interaction(
+                Plot::new("term_spread_plot")
+                    .height(state.chart_heights.bond_term_spread),
+            )
+                .x_axis_label("Trading Day (recent -> past)")
+                .y_axis_label("Spread (percentage points)")
+                .legend(egui_plot::Legend::default())
+                .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&spread_hover))
+                .label_formatter(chart_utils::no_hover_label),
+            |plot_ui| {
                 plot_ui.line(
                     Line::new(spread_points)
                         .name("10Y-2Y Spread")
@@ -106,7 +111,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                         .color(egui::Color32::from_rgb(150, 150, 150))
                         .style(egui_plot::LineStyle::dashed_dense()),
                 );
-            });
+            },
+        );
 
         // Curve slope over time
         ui.add_space(8.0);
@@ -125,22 +131,25 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         let slope_hover = [HoverSeries { name: "30Y-3M Slope", data: &slope_data, decimals: 2, suffix: " pp" }];
 
         height_control(ui, &mut state.chart_heights.bond_curve_slope, "Curve Slope Chart Height");
-        Plot::new("curve_slope_plot")
-            .height(state.chart_heights.bond_curve_slope)
-            .allow_drag(true)
-            .allow_scroll(false)
-            .allow_zoom(false)
-            .x_axis_label("Trading Day (recent -> past)")
-            .y_axis_label("Slope (percentage points)")
-            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&slope_hover))
-            .label_formatter(chart_utils::no_hover_label)
-            .show(ui, |plot_ui| {
+        chart_utils::plot_with_y_drag(
+            ui,
+            "curve_slope_plot",
+            chart_utils::default_plot_interaction(
+                Plot::new("curve_slope_plot")
+                    .height(state.chart_heights.bond_curve_slope),
+            )
+                .x_axis_label("Trading Day (recent -> past)")
+                .y_axis_label("Slope (percentage points)")
+                .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&slope_hover))
+                .label_formatter(chart_utils::no_hover_label),
+            |plot_ui| {
                 plot_ui.line(
                     Line::new(slope_points)
                         .name("30Y-3M Slope")
                         .color(egui::Color32::from_rgb(100, 200, 100)),
                 );
-            });
+            },
+        );
 
         // Summary
         ui.add_space(8.0);

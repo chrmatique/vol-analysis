@@ -1,7 +1,8 @@
 /// Shared chart utilities for all UI views that render plots.
 
 use eframe::egui;
-use egui_plot::{CoordinatesFormatter, Corner, PlotBounds, PlotPoint};
+use eframe::egui::Vec2b;
+use egui_plot::{CoordinatesFormatter, Corner, Plot, PlotBounds, PlotPoint, PlotUi};
 
 // ── Hover label utilities ───────────────────────────────────────────────────
 
@@ -99,6 +100,103 @@ fn nearest_x_index(data: &[[f64; 2]], target_x: f64) -> Option<usize> {
     } else {
         Some(idx)
     }
+}
+
+// ── Y-axis drag-to-zoom ─────────────────────────────────────────────────────
+
+/// Per-chart state cached across frames for the Y-axis drag sensor.
+#[derive(Default, Clone)]
+struct YAxisDragState {
+    /// Inner plot frame rect from the previous frame, used to position the
+    /// drag sensor on the current frame before `Plot::show()` is called.
+    plot_frame: Option<egui::Rect>,
+}
+
+/// How many pixels of drag translate to ×1 zoom change (larger = faster).
+const Y_DRAG_SENSITIVITY: f32 = 0.005;
+
+/// Width of the invisible hit area placed to the left of the plot frame.
+const Y_AXIS_HIT_WIDTH: f32 = 50.0;
+
+/// Drop-in replacement for `Plot::show()` that adds click-and-drag Y-axis
+/// scaling. Drag **up** on the Y-axis label area to zoom in; drag **down**
+/// to zoom out.
+///
+/// `id_source` should be the same string passed to `Plot::new(…)` so that the
+/// per-chart state is uniquely keyed. The `plot` argument should already have
+/// all modifiers applied (e.g. via [`default_plot_interaction`]).
+pub fn plot_with_y_drag<S: std::hash::Hash>(
+    ui: &mut egui::Ui,
+    id_source: S,
+    plot: Plot<'_>,
+    build_fn: impl FnOnce(&mut PlotUi),
+) {
+    let state_id = egui::Id::new(("y_drag_state", id_source));
+
+    // Read state cached from the previous frame.
+    let state: YAxisDragState = ui
+        .data(|d| d.get_temp::<YAxisDragState>(state_id))
+        .unwrap_or_default();
+
+    // Place an invisible drag-sense widget over the Y-axis label area (using
+    // the previous frame's rect). By formally claiming the drag through egui's
+    // interaction system, the parent ScrollArea won't also scroll when the user
+    // is adjusting the Y-axis.
+    let y_delta_px: f32 = if let Some(frame) = state.plot_frame {
+        let sense_rect = egui::Rect::from_min_size(
+            egui::pos2(frame.left() - Y_AXIS_HIT_WIDTH, frame.top()),
+            egui::vec2(Y_AXIS_HIT_WIDTH, frame.height()),
+        );
+        let resp = ui.interact(sense_rect, state_id.with("y_sense"), egui::Sense::drag());
+        if resp.dragged() {
+            resp.drag_delta().y
+        } else {
+            0.0
+        }
+    } else {
+        0.0
+    };
+
+    // Run the plot, applying Y-zoom inside the closure when a drag is active.
+    let response = plot.show(ui, |plot_ui| {
+        if y_delta_px.abs() > 0.001 {
+            let bounds = plot_ui.plot_bounds();
+            let y_min = bounds.min()[1];
+            let y_max = bounds.max()[1];
+            let center = (y_min + y_max) * 0.5;
+            let half_range = (y_max - y_min) * 0.5;
+
+            // Drag up (negative delta) → zoom_factor > 1 → shrink range.
+            // Drag down (positive delta) → zoom_factor < 1 → expand range.
+            let zoom_factor = ((1.0 - y_delta_px * Y_DRAG_SENSITIVITY) as f64).max(0.1);
+            let new_half = half_range / zoom_factor;
+
+            let new_bounds = PlotBounds::from_min_max(
+                [bounds.min()[0], center - new_half],
+                [bounds.max()[0], center + new_half],
+            );
+            plot_ui.set_plot_bounds(new_bounds);
+        }
+        build_fn(plot_ui);
+    });
+
+    // Cache the inner frame rect for the next frame.
+    let new_state = YAxisDragState {
+        plot_frame: Some(*response.transform.frame()),
+    };
+    ui.data_mut(|d| d.insert_temp(state_id, new_state));
+}
+
+// ── Plot interaction presets ─────────────────────────────────────────────────
+
+/// Apply the standard Y-axis-only interaction settings to a `Plot`.
+/// - Drag: Y-axis only (vertical panning)
+/// - Scroll/zoom: Y-axis only (vertical stretch/compress)
+/// - X-axis is locked on both axes; double-click resets to auto-bounds.
+pub fn default_plot_interaction(plot: Plot<'_>) -> Plot<'_> {
+    plot.allow_drag(Vec2b::new(false, true))
+        .allow_scroll(false)
+        .allow_zoom(Vec2b::new(false, true))
 }
 
 /// Inline height-adjustment drag control placed immediately above a chart.

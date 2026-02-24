@@ -2,8 +2,16 @@ use eframe::egui;
 use egui_plot::{Line, Plot, PlotPoints};
 
 use crate::app::AppState;
-use crate::ui::chart_utils::height_control;
+use crate::ui::chart_utils::{self, height_control};
 use crate::config;
+
+fn fmt_usd(value: f64) -> String {
+    if value < 0.0 {
+        format!("(${:.2})", value.abs())
+    } else {
+        format!("${:.2}", value)
+    }
+}
 
 pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
     ui.heading("Market Structure Dashboard");
@@ -21,7 +29,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
 
         if let Some(ref bench) = state.market_data.benchmark {
             if let Some(last) = bench.bars.last() {
-                metric_card(ui, "SPY Last Close", &format!("${:.2}", last.close));
+                metric_card(ui, "SPY Last Close", &fmt_usd(last.close));
             }
         }
 
@@ -84,7 +92,7 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                 ui.label(&sector.symbol);
 
                 if let Some(last) = sector.bars.last() {
-                    ui.label(format!("${:.2}", last.close));
+                    ui.label(fmt_usd(last.close));
                 } else {
                     ui.label("-");
                 }
@@ -189,21 +197,24 @@ fn render_put_call_skew_section(ui: &mut egui::Ui, state: &mut AppState) {
             .collect();
 
         height_control(ui, &mut state.chart_heights.put_call_skew, "P/C Ratio & SKEW Chart Height");
-        Plot::new("put_call_ratio_plot")
-            .height(state.chart_heights.put_call_skew)
-            .allow_drag(true)
-            .allow_scroll(false)
-            .allow_zoom(false)
-            .x_axis_label("Trading Day (recent -> past)")
-            .y_axis_label("P/C Ratio")
-            .legend(egui_plot::Legend::default())
-            .show(ui, |plot_ui| {
+        chart_utils::plot_with_y_drag(
+            ui,
+            "put_call_ratio_plot",
+            chart_utils::default_plot_interaction(
+                Plot::new("put_call_ratio_plot")
+                    .height(state.chart_heights.put_call_skew),
+            )
+                .x_axis_label("Trading Day (recent -> past)")
+                .y_axis_label("P/C Ratio")
+                .legend(egui_plot::Legend::default()),
+            |plot_ui| {
                 plot_ui.line(
                     Line::new(pc_points)
                         .name("Total P/C Ratio")
                         .color(egui::Color32::from_rgb(255, 150, 50)),
                 );
-            });
+            },
+        );
 
         ui.add_space(8.0);
     }
@@ -218,21 +229,24 @@ fn render_put_call_skew_section(ui: &mut egui::Ui, state: &mut AppState) {
             .map(|(i, r)| [i as f64, r.skew])
             .collect();
 
-        Plot::new("skew_plot")
-            .height(state.chart_heights.put_call_skew)
-            .allow_drag(true)
-            .allow_scroll(false)
-            .allow_zoom(false)
-            .x_axis_label("Trading Day (recent -> past)")
-            .y_axis_label("SKEW")
-            .legend(egui_plot::Legend::default())
-            .show(ui, |plot_ui| {
+        chart_utils::plot_with_y_drag(
+            ui,
+            "skew_plot",
+            chart_utils::default_plot_interaction(
+                Plot::new("skew_plot")
+                    .height(state.chart_heights.put_call_skew),
+            )
+                .x_axis_label("Trading Day (recent -> past)")
+                .y_axis_label("SKEW")
+                .legend(egui_plot::Legend::default()),
+            |plot_ui| {
                 plot_ui.line(
                     Line::new(skew_points)
                         .name("CBOE SKEW")
                         .color(egui::Color32::from_rgb(70, 180, 220)),
                 );
-            });
+            },
+        );
     }
 }
 

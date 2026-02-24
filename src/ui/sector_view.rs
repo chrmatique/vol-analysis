@@ -75,22 +75,25 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         let prices: PlotPoints = price_data.iter().copied().collect();
         let hover = [HoverSeries { name: &sector.symbol, data: &price_data, decimals: 2, suffix: "" }];
 
-        Plot::new("price_plot")
-            .height(state.chart_heights.sector_price)
-            .allow_drag(true)
-            .allow_scroll(false)
-            .allow_zoom(false)
-            .x_axis_label("Trading Day")
-            .y_axis_label("Price ($)")
-            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&hover))
-            .label_formatter(chart_utils::no_hover_label)
-            .show(ui, |plot_ui| {
+        chart_utils::plot_with_y_drag(
+            ui,
+            "price_plot",
+            chart_utils::default_plot_interaction(
+                Plot::new("price_plot")
+                    .height(state.chart_heights.sector_price),
+            )
+                .x_axis_label("Trading Day")
+                .y_axis_label("Price ($)")
+                .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&hover))
+                .label_formatter(chart_utils::no_hover_label),
+            |plot_ui| {
                 plot_ui.line(
                     Line::new(prices)
                         .name(&sector.symbol)
                         .color(egui::Color32::from_rgb(100, 150, 255)),
                 );
-            });
+            },
+        );
     });
 
     ui.add_space(8.0);
@@ -136,17 +139,19 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         ];
 
         height_control(ui, &mut state.chart_heights.sector_vol, "Volatility Chart Height");
-        Plot::new("vol_plot")
-            .height(state.chart_heights.sector_vol)
-            .allow_drag(true)
-            .allow_scroll(false)
-            .allow_zoom(false)
-            .x_axis_label("Trading Day (aligned)")
-            .y_axis_label("Annualized Vol (%)")
-            .legend(egui_plot::Legend::default())
-            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&vol_hover))
-            .label_formatter(chart_utils::no_hover_label)
-            .show(ui, |plot_ui| {
+        chart_utils::plot_with_y_drag(
+            ui,
+            "vol_plot",
+            chart_utils::default_plot_interaction(
+                Plot::new("vol_plot")
+                    .height(state.chart_heights.sector_vol),
+            )
+                .x_axis_label("Trading Day (aligned)")
+                .y_axis_label("Annualized Vol (%)")
+                .legend(egui_plot::Legend::default())
+                .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&vol_hover))
+                .label_formatter(chart_utils::no_hover_label),
+            |plot_ui| {
                 plot_ui.line(
                     Line::new(short_points)
                         .name(format!("{}D Vol", config::SHORT_VOL_WINDOW))
@@ -162,7 +167,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                         .name("Parkinson Vol")
                         .color(egui::Color32::from_rgb(100, 220, 100)),
                 );
-            });
+            },
+        );
 
         // Vol ratio chart
         ui.add_space(8.0);
@@ -183,16 +189,18 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         let ratio_hover = [HoverSeries { name: "Vol Ratio", data: &ratio_data, decimals: 2, suffix: "" }];
 
         height_control(ui, &mut state.chart_heights.sector_ratio, "Vol Ratio Chart Height");
-        Plot::new("ratio_plot")
-            .height(state.chart_heights.sector_ratio)
-            .allow_drag(true)
-            .allow_scroll(false)
-            .allow_zoom(false)
-            .x_axis_label("Trading Day (aligned)")
-            .y_axis_label("Vol Ratio")
-            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&ratio_hover))
-            .label_formatter(chart_utils::no_hover_label)
-            .show(ui, |plot_ui| {
+        chart_utils::plot_with_y_drag(
+            ui,
+            "ratio_plot",
+            chart_utils::default_plot_interaction(
+                Plot::new("ratio_plot")
+                    .height(state.chart_heights.sector_ratio),
+            )
+                .x_axis_label("Trading Day (aligned)")
+                .y_axis_label("Vol Ratio")
+                .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&ratio_hover))
+                .label_formatter(chart_utils::no_hover_label),
+            |plot_ui| {
                 plot_ui.line(
                     Line::new(ratio_points)
                         .name("Vol Ratio")
@@ -204,7 +212,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                         .color(egui::Color32::from_rgb(150, 150, 150))
                         .style(egui_plot::LineStyle::dashed_dense()),
                 );
-            });
+            },
+        );
 
         // Summary stats
         ui.add_space(8.0);

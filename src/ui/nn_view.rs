@@ -254,22 +254,25 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         let loss_hover = [HoverSeries { name: "MSE Loss", data: &loss_data, decimals: 6, suffix: "" }];
 
         height_control(ui, &mut state.chart_heights.nn_loss, "Loss Chart Height");
-        Plot::new("loss_plot")
-            .height(state.chart_heights.nn_loss)
-            .allow_drag(true)
-            .allow_scroll(false)
-            .allow_zoom(false)
-            .x_axis_label("Epoch")
-            .y_axis_label("MSE Loss")
-            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&loss_hover))
-            .label_formatter(chart_utils::no_hover_label)
-            .show(ui, |plot_ui| {
+        chart_utils::plot_with_y_drag(
+            ui,
+            "loss_plot",
+            chart_utils::default_plot_interaction(
+                Plot::new("loss_plot")
+                    .height(state.chart_heights.nn_loss),
+            )
+                .x_axis_label("Epoch")
+                .y_axis_label("MSE Loss")
+                .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&loss_hover))
+                .label_formatter(chart_utils::no_hover_label),
+            |plot_ui| {
                 plot_ui.line(
                     Line::new(loss_points)
                         .name("Training Loss")
                         .color(egui::Color32::from_rgb(255, 100, 100)),
                 );
-            });
+            },
+        );
     }
 
     ui.add_space(8.0);

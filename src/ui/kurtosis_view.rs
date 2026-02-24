@@ -117,17 +117,19 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         ];
 
         height_control(ui, &mut state.chart_heights.kurtosis_distribution, "Distribution Plot Height");
-        Plot::new("distribution_plot")
-            .height(state.chart_heights.kurtosis_distribution)
-            .allow_drag(true)
-            .allow_scroll(false)
-            .allow_zoom(false)
-            .x_axis_label("Daily Log Return (%)")
-            .y_axis_label("Density")
-            .legend(egui_plot::Legend::default())
-            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&dist_hover))
-            .label_formatter(chart_utils::no_hover_label)
-            .show(ui, |plot_ui| {
+        chart_utils::plot_with_y_drag(
+            ui,
+            "distribution_plot",
+            chart_utils::default_plot_interaction(
+                Plot::new("distribution_plot")
+                    .height(state.chart_heights.kurtosis_distribution),
+            )
+                .x_axis_label("Daily Log Return (%)")
+                .y_axis_label("Density")
+                .legend(egui_plot::Legend::default())
+                .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&dist_hover))
+                .label_formatter(chart_utils::no_hover_label),
+            |plot_ui| {
                 plot_ui.line(
                     Line::new(empirical_points)
                         .name("Empirical (KDE)")
@@ -141,7 +143,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                         .width(2.0)
                         .style(egui_plot::LineStyle::dashed_dense()),
                 );
-            });
+            },
+        );
 
         ui.add_space(4.0);
         ui.small("Blue = empirical density (Gaussian KDE). Red dashed = fitted normal distribution. Fat tails appear where the blue curve extends beyond the red.");
@@ -185,17 +188,19 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         let kurt_hover = [HoverSeries { name: "Rolling Kurtosis", data: &kurt_data, decimals: 3, suffix: "" }];
 
         height_control(ui, &mut state.chart_heights.kurtosis_rolling_kurtosis, "Rolling Kurtosis Chart Height");
-        Plot::new("rolling_kurtosis_plot")
-            .height(state.chart_heights.kurtosis_rolling_kurtosis)
-            .allow_drag(true)
-            .allow_scroll(false)
-            .allow_zoom(false)
-            .x_axis_label("Trading Days")
-            .y_axis_label("Excess Kurtosis")
-            .legend(egui_plot::Legend::default())
-            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&kurt_hover))
-            .label_formatter(chart_utils::no_hover_label)
-            .show(ui, |plot_ui| {
+        chart_utils::plot_with_y_drag(
+            ui,
+            "rolling_kurtosis_plot",
+            chart_utils::default_plot_interaction(
+                Plot::new("rolling_kurtosis_plot")
+                    .height(state.chart_heights.kurtosis_rolling_kurtosis),
+            )
+                .x_axis_label("Trading Days")
+                .y_axis_label("Excess Kurtosis")
+                .legend(egui_plot::Legend::default())
+                .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&kurt_hover))
+                .label_formatter(chart_utils::no_hover_label),
+            |plot_ui| {
                 plot_ui.line(
                     Line::new(kurt_points)
                         .name("Rolling Kurtosis")
@@ -208,7 +213,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                         .color(egui::Color32::from_rgb(150, 150, 150))
                         .style(egui_plot::LineStyle::dashed_loose()),
                 );
-            });
+            },
+        );
     }
 
     ui.add_space(12.0);
@@ -244,17 +250,19 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
             ];
 
             height_control(ui, &mut state.chart_heights.kurtosis_accel_chart, "Acceleration Chart Height");
-            Plot::new("kurtosis_accel_plot")
-                .height(state.chart_heights.kurtosis_accel_chart)
-                .allow_drag(true)
-                .allow_scroll(false)
-                .allow_zoom(false)
-                .x_axis_label("Observation")
-                .y_axis_label("Rate of Change")
-                .legend(egui_plot::Legend::default())
-                .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&accel_hover))
-                .label_formatter(chart_utils::no_hover_label)
-                .show(ui, |plot_ui| {
+            chart_utils::plot_with_y_drag(
+                ui,
+                "kurtosis_accel_plot",
+                chart_utils::default_plot_interaction(
+                    Plot::new("kurtosis_accel_plot")
+                        .height(state.chart_heights.kurtosis_accel_chart),
+                )
+                    .x_axis_label("Observation")
+                    .y_axis_label("Rate of Change")
+                    .legend(egui_plot::Legend::default())
+                    .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&accel_hover))
+                    .label_formatter(chart_utils::no_hover_label),
+                |plot_ui| {
                     plot_ui.line(
                         Line::new(vel_points)
                             .name("Velocity (trend)")
@@ -273,7 +281,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                             .color(egui::Color32::from_rgb(150, 150, 150))
                             .style(egui_plot::LineStyle::dashed_loose()),
                     );
-                });
+                },
+            );
 
             ui.add_space(6.0);
 
@@ -362,17 +371,19 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
         let skew_hover = [HoverSeries { name: "Rolling Skewness", data: &skew_data, decimals: 3, suffix: "" }];
 
         height_control(ui, &mut state.chart_heights.kurtosis_rolling_skewness, "Rolling Skewness Chart Height");
-        Plot::new("rolling_skewness_plot")
-            .height(state.chart_heights.kurtosis_rolling_skewness)
-            .allow_drag(true)
-            .allow_scroll(false)
-            .allow_zoom(false)
-            .x_axis_label("Trading Days")
-            .y_axis_label("Skewness")
-            .legend(egui_plot::Legend::default())
-            .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&skew_hover))
-            .label_formatter(chart_utils::no_hover_label)
-            .show(ui, |plot_ui| {
+        chart_utils::plot_with_y_drag(
+            ui,
+            "rolling_skewness_plot",
+            chart_utils::default_plot_interaction(
+                Plot::new("rolling_skewness_plot")
+                    .height(state.chart_heights.kurtosis_rolling_skewness),
+            )
+                .x_axis_label("Trading Days")
+                .y_axis_label("Skewness")
+                .legend(egui_plot::Legend::default())
+                .coordinates_formatter(chart_utils::HOVER_CORNER, chart_utils::hover_formatter(&skew_hover))
+                .label_formatter(chart_utils::no_hover_label),
+            |plot_ui| {
                 plot_ui.line(
                     Line::new(skew_points)
                         .name("Rolling Skewness")
@@ -385,7 +396,8 @@ pub fn render(ui: &mut egui::Ui, state: &mut AppState) {
                         .color(egui::Color32::from_rgb(150, 150, 150))
                         .style(egui_plot::LineStyle::dashed_loose()),
                 );
-            });
+            },
+        );
     }
 
     ui.add_space(12.0);

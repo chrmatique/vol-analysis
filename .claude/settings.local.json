@@ -1,8 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cargo doc:*)",
-      "Bash(cargo build:*)"
+      "Bash(export PATH=\"$PATH:/usr/local/cargo/bin:$HOME/.cargo/bin\" && cargo build --manifest-path \"/mnt/f/Cursor Projects/mkt-noise-analysis/Cargo.toml\" 2>&1)",
+      "Bash(\"/mnt/c/Users/cmats/.cargo/bin/cargo.exe\":*)"
     ]
   }
 }
